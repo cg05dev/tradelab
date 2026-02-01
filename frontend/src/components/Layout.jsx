@@ -1,0 +1,21 @@
+export default function Layout({ children }) {
+  return (
+    <div className="h-screen bg-black topography-bg flex flex-col overflow-hidden">
+      {/* Header */}
+      <header className="flex-shrink-0 border-b border-neutral-800 bg-black/80 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-6 py-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-medium text-white tracking-tight">
+              TradeLab
+            </h1>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto w-full">
+        {children}
+      </main>
+    </div>
+  )
+}

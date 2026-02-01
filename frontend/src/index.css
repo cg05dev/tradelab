@@ -1,0 +1,367 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Inter', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: subpixel-antialiased;
+  -moz-osx-font-smoothing: auto;
+  text-rendering: optimizeLegibility;
+  background: #0a0a0a;
+  min-height: 100vh;
+  color: #ffffff;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #111827;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #374151;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #4b5563;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: color, background-color, border-color, opacity, transform, box-shadow;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 200ms;
+}
+
+/* Ensure inputs are interactive */
+input, textarea, select, button {
+  pointer-events: auto !important;
+  user-select: text;
+}
+
+input[type="number"], input[type="text"], input[type="email"], textarea {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+}
+
+/* Hide number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Focus visible styles */
+*:focus-visible {
+  outline: 2px solid #10b981;
+  outline-offset: 2px;
+}
+
+/* Selection styles */
+::selection {
+  background-color: #10b981;
+  color: #ffffff;
+}
+
+/* Modern Trading Background */
+.topography-bg {
+  position: relative;
+  background: 
+    /* Subtle radial glow from center */
+    radial-gradient(ellipse 100% 100% at 50% 50%, rgba(16, 185, 129, 0.03) 0%, transparent 60%),
+    /* Corner accents */
+    radial-gradient(ellipse 40% 40% at 0% 0%, rgba(16, 185, 129, 0.02) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 40% at 100% 100%, rgba(16, 185, 129, 0.02) 0%, transparent 50%),
+    /* Base gradient */
+    linear-gradient(135deg, #0a0a0a 0%, #0d0d0d 25%, #0a0a0a 50%, #0c0c0c 75%, #0a0a0a 100%);
+  background-attachment: fixed;
+}
+
+.topography-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: 
+    /* Subtle grid pattern - horizontal lines */
+    repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      transparent 39px,
+      rgba(255, 255, 255, 0.02) 39px,
+      rgba(255, 255, 255, 0.02) 40px
+    ),
+    /* Subtle grid pattern - vertical lines */
+    repeating-linear-gradient(
+      90deg,
+      transparent 0px,
+      transparent 39px,
+      rgba(255, 255, 255, 0.02) 39px,
+      rgba(255, 255, 255, 0.02) 40px
+    );
+  pointer-events: none;
+  opacity: 1;
+}
+
+.topography-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: 
+    /* Subtle dot pattern */
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.015) 1px, transparent 0);
+  background-size: 40px 40px;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Card Enhancements */
+.card {
+  position: relative;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.card:hover {
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  transform: translateY(-1px);
+}
+
+.card.cursor-pointer:hover {
+  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(16, 185, 129, 0.2);
+}
+
+/* Button Enhancements */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+  transition: left 0.5s;
+}
+
+.btn-primary:hover::before {
+  left: 100%;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+/* Input Focus Enhancements */
+input:focus, textarea:focus, select:focus {
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.5);
+}
+
+/* Subtle Glow for Important Elements */
+.glow-green {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+}
+
+.glow-red {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+}
+
+/* Section Headers */
+.section-header {
+  position: relative;
+  padding-left: 12px;
+}
+
+.section-header::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 16px;
+  background: linear-gradient(180deg, #10b981, #059669);
+  border-radius: 2px;
+}
+
+/* Metric Cards */
+.metric-card {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(16, 185, 129, 0.02) 100%);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  transition: all 0.3s ease;
+}
+
+.metric-card:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%);
+  border-color: rgba(16, 185, 129, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Status Badges */
+.status-badge {
+  position: relative;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+}
+
+.status-badge:hover {
+  transform: scale(1.05);
+}
+
+/* Leverage Slider Styles */
+.leverage-slider {
+  height: 8px;
+  border-radius: 4px;
+  appearance: none;
+  cursor: pointer;
+  outline: none;
+}
+
+.leverage-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #10b981;
+  cursor: pointer;
+  border: 2px solid #000000;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s ease;
+}
+
+.leverage-slider::-webkit-slider-thumb:hover {
+  background: #059669;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.4);
+  transform: scale(1.1);
+}
+
+.leverage-slider::-webkit-slider-thumb:active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.5);
+}
+
+.leverage-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #10b981;
+  cursor: pointer;
+  border: 2px solid #000000;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s ease;
+}
+
+.leverage-slider::-moz-range-thumb:hover {
+  background: #059669;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.4);
+  transform: scale(1.1);
+}
+
+.leverage-slider::-moz-range-thumb:active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.5);
+}
+
+.leverage-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+}
+
+/* Take Profits Count Slider Styles */
+.tp-count-slider {
+  height: 8px;
+  border-radius: 4px;
+  appearance: none;
+  cursor: pointer;
+  outline: none;
+}
+
+.tp-count-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #10b981;
+  cursor: pointer;
+  border: 2px solid #000000;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s ease;
+}
+
+.tp-count-slider::-webkit-slider-thumb:hover {
+  background: #059669;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.4);
+  transform: scale(1.1);
+}
+
+.tp-count-slider::-webkit-slider-thumb:active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.5);
+}
+
+.tp-count-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #10b981;
+  cursor: pointer;
+  border: 2px solid #000000;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+  transition: all 0.2s ease;
+}
+
+.tp-count-slider::-moz-range-thumb:hover {
+  background: #059669;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.4);
+  transform: scale(1.1);
+}
+
+.tp-count-slider::-moz-range-thumb:active {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.5);
+}
+
+.tp-count-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 4px;
+}
+

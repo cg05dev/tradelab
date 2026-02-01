@@ -1,0 +1,1246 @@
+"""
+FastAPI Backend for TradeLab
+Handles all trading journal logic and data persistence
+"""
+
+from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import List, Optional, Dict
+import pandas as pd
+import json
+from datetime import datetime
+import os
+import math
+import io
+import traceback
+import asyncio
+import time
+from threading import Thread
+
+# Import Hyperliquid client
+try:
+    from hyperliquid_client import hl_client
+except ImportError:
+    hl_client = None
+
+# Import Trade Calculator
+from trade_calculator import trade_calc, TradeCalculator
+
+app = FastAPI(title="TradeLab API")
+
+# CORS middleware for React frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins in development
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Data models
+class TakeProfit(BaseModel):
+    price: float
+    allocation: float
+
+class StopLoss(BaseModel):
+    price: float
+    allocation: float
+
+class TradeData(BaseModel):
+    asset: str
+    direction: str
+    entry_price: float
+    stop_loss: float
+    position_size: float
+    take_profits: List[TakeProfit]
+    stop_losses: List[StopLoss]
+    thesis: Optional[str] = None
+
+class PositionSizeRequest(BaseModel):
+    entry_price: float
+    stop_loss: float
+    leverage: float
+    direction: str
+    risk_percentage: Optional[float] = None
+
+class CloseTradeRequest(BaseModel):
+    trade_index: int
+    exit_price: float
+
+class PartialCloseRequest(BaseModel):
+    trade_index: int
+    tp_price: float
+    tp_allocation: float
+    tp_index: int
+
+class StopLossHitRequest(BaseModel):
+    trade_index: int
+    sl_price: float
+    sl_allocation: float
+    sl_index: int
+
+class UpdatePortfolioRequest(BaseModel):
+    portfolio_size: float
+
+# Configuration
+CSV_FILE = os.path.join(os.path.dirname(__file__), 'trades.csv')
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'portfolio_config.json')
+RISK_PCT = 0.02
+
+JOURNAL_COLUMNS = [
+    'Date', 'Asset', 'Direction', 'Entry', 'SL', 'TPs', 'SLs', 'Position_Size', 
+    'Confirmations', 'Thesis', 'Status', 'Exit_Price', 'P&L', 'Hold_Time',
+    'TP_Hit', 'TP_Price', 'SL_Hit', 'SL_Price', 'Hit_TPs'
+]
+
+def load_trades():
+    """Load trades from CSV"""
+    try:
+        if os.path.exists(CSV_FILE):
+            df = pd.read_csv(CSV_FILE)
+            # Handle migration
+            if 'Hit_TPs' not in df.columns:
+                df['Hit_TPs'] = [json.dumps([]) for _ in range(len(df))]
+            if 'SLs' not in df.columns:
+                df['SLs'] = [json.dumps([]) for _ in range(len(df))]
+            return df
+        return pd.DataFrame(columns=JOURNAL_COLUMNS)
+    except Exception as e:
+        return pd.DataFrame(columns=JOURNAL_COLUMNS)
+
+def save_trades(df):
+    """Save trades to CSV"""
+    df.to_csv(CSV_FILE, index=False)
+
+def load_portfolio_size():
+    """Load portfolio size from config"""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                return config.get('portfolio_size', 0)
+        return 0
+    except Exception:
+        return 0
+
+def save_portfolio_size(size):
+    """Save portfolio size to config"""
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump({'portfolio_size': size}, f)
+
+def clean_trade_data(df):
+    """Clean DataFrame by replacing NaN, inf, -inf with None and converting to dict"""
+    # Replace NaN, inf, -inf with None for JSON serialization
+    df = df.replace([float('inf'), float('-inf')], None)
+    df = df.where(pd.notnull(df), None)
+    
+    # Convert to dict and clean up None values
+    trades_list = df.to_dict('records')
+    
+    # Convert None to appropriate defaults for numeric fields
+    for trade in trades_list:
+        for key, value in trade.items():
+            # Skip _index field - it's a special field for tracking the original DataFrame index
+            if key == '_index':
+                continue
+            if value is None or (isinstance(value, float) and (pd.isna(value) or math.isinf(value))):
+                if key in ['Entry', 'SL', 'Position_Size', 'Exit_Price', 'P&L']:
+                    trade[key] = 0.0
+                elif key in ['TP_Hit', 'SL_Hit']:
+                    trade[key] = False
+                else:
+                    trade[key] = None
+    
+    return trades_list
+
+# API Routes
+
+@app.get("/")
+def read_root():
+    return {"message": "TradeLab API"}
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint for faster startup detection"""
+    return {"status": "ok"}
+
+@app.post("/api/shutdown")
+def shutdown():
+    """Shutdown endpoint (called when frontend closes)"""
+    # Note: This is informational - actual shutdown should be done via the launcher
+    return {"message": "Shutdown signal received"}
+
+@app.post("/api/portfolio/reset")
+def reset_portfolio():
+    """Reset portfolio configuration file"""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            os.remove(CONFIG_FILE)
+            return {"message": "Portfolio reset successfully"}
+        return {"message": "Portfolio file does not exist"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error resetting portfolio: {str(e)}")
+
+@app.get("/api/portfolio")
+def get_portfolio():
+    """Get current portfolio size"""
+    return {"portfolio_size": load_portfolio_size()}
+
+@app.put("/api/portfolio")
+def update_portfolio(request: UpdatePortfolioRequest):
+    """Update portfolio size"""
+    if request.portfolio_size < 0:
+        raise HTTPException(status_code=400, detail="Portfolio size cannot be negative")
+    save_portfolio_size(request.portfolio_size)
+    return {"portfolio_size": request.portfolio_size, "message": "Portfolio size updated"}
+
+@app.get("/api/trades")
+def get_trades():
+    """Get all trades"""
+    try:
+        df = load_trades()
+        if df.empty:
+            return {"trades": []}
+        
+        trades_list = clean_trade_data(df)
+        return {"trades": trades_list}
+    except Exception as e:
+        print(f"Error in get_trades: {e}")
+        traceback.print_exc()
+        return {"trades": []}
+
+@app.get("/api/trades/open")
+def get_open_trades():
+    """Get open trades only"""
+    try:
+        df = load_trades()
+        if df.empty:
+            return {"trades": []}
+        if 'Status' not in df.columns:
+            return {"trades": []}
+        open_trades = df[df['Status'] == 'Open']
+        
+        # Clean trade data (handles NaN, inf, -inf)
+        trades_list = clean_trade_data(open_trades)
+        # Add the original DataFrame index to each trade
+        for idx, trade in enumerate(trades_list):
+            # Get the actual row index from the filtered DataFrame
+            original_index = open_trades.index[idx]
+            trade['_index'] = int(original_index)
+        
+        return {"trades": trades_list}
+    except Exception as e:
+        print(f"Error in get_open_trades: {e}")
+        traceback.print_exc()
+        return {"trades": []}
+
+@app.get("/api/trades/closed")
+def get_closed_trades():
+    """Get closed trades only"""
+    try:
+        df = load_trades()
+        if df.empty:
+            return {"trades": []}
+        if 'Status' not in df.columns:
+            return {"trades": []}
+        closed_trades = df[df['Status'] == 'Closed']
+        
+        trades_list = clean_trade_data(closed_trades)
+        return {"trades": trades_list}
+    except Exception as e:
+        print(f"Error in get_closed_trades: {e}")
+        traceback.print_exc()
+        return {"trades": []}
+
+@app.post("/api/trades")
+def add_trade(trade_data: TradeData):
+    """Add a new trade"""
+    try:
+        # Validation
+        if trade_data.entry_price <= 0:
+            raise HTTPException(status_code=400, detail="Entry price must be greater than 0")
+        
+        if trade_data.direction.lower() not in ['long', 'short']:
+            raise HTTPException(status_code=400, detail="Direction must be 'long' or 'short'")
+        
+        # Validate stop loss
+        if trade_data.stop_loss > 0:
+            if trade_data.direction.lower() == 'long' and trade_data.stop_loss >= trade_data.entry_price:
+                raise HTTPException(status_code=400, detail="Stop loss must be below entry price for long positions")
+            if trade_data.direction.lower() == 'short' and trade_data.stop_loss <= trade_data.entry_price:
+                raise HTTPException(status_code=400, detail="Stop loss must be above entry price for short positions")
+        
+        # Validate take profits
+        for tp in trade_data.take_profits:
+            if tp.price > 0:
+                if trade_data.direction.lower() == 'long' and tp.price <= trade_data.entry_price:
+                    raise HTTPException(status_code=400, detail=f"Take profit {tp.price} must be above entry price for long positions")
+                if trade_data.direction.lower() == 'short' and tp.price >= trade_data.entry_price:
+                    raise HTTPException(status_code=400, detail=f"Take profit {tp.price} must be below entry price for short positions")
+        
+        df = load_trades()
+        
+        new_trade = {
+            'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'Asset': trade_data.asset.strip(),
+            'Direction': trade_data.direction.lower(),
+            'Entry': float(trade_data.entry_price),
+            'SL': float(trade_data.stop_loss) if trade_data.stop_loss > 0 else 0.0,
+            'TPs': json.dumps([tp.dict() for tp in trade_data.take_profits]),
+            'SLs': json.dumps([sl.dict() for sl in trade_data.stop_losses]),
+            'Position_Size': float(trade_data.position_size),
+            'Thesis': str(trade_data.thesis) if trade_data.thesis else '',
+            'Status': 'Open',
+            'Exit_Price': None,
+            'P&L': 0.0,
+            'Hold_Time': None,
+            'TP_Hit': False,
+            'TP_Price': None,
+            'SL_Hit': False,
+            'SL_Price': None,
+            'Hit_TPs': json.dumps([])
+        }
+        
+        df = pd.concat([df, pd.DataFrame([new_trade])], ignore_index=True)
+        save_trades(df)
+        
+        return {"message": "Trade added successfully", "trade_index": len(df) - 1}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/trades/close")
+def close_trade(request: CloseTradeRequest):
+    """Close a trade"""
+    df = load_trades()
+    
+    if request.trade_index >= len(df) or request.trade_index < 0:
+        raise HTTPException(status_code=400, detail="Invalid trade index")
+    
+    trade = df.iloc[request.trade_index]
+    
+    if trade['Status'] != 'Open':
+        raise HTTPException(status_code=400, detail="Trade is already closed")
+    
+    # Calculate P&L
+    entry_price = trade['Entry']
+    direction = trade['Direction']
+    
+    if direction == 'long':
+        pnl = (request.exit_price - entry_price) / entry_price * trade['Position_Size']
+    else:
+        pnl = (entry_price - request.exit_price) / entry_price * trade['Position_Size']
+    
+    # Calculate hold time
+    entry_date = pd.to_datetime(trade['Date'])
+    exit_date = datetime.now()
+    hold_time = (exit_date - entry_date).total_seconds() / 3600
+    
+    # Update trade
+    df.at[request.trade_index, 'Status'] = 'Closed'
+    df.at[request.trade_index, 'Exit_Price'] = request.exit_price
+    df.at[request.trade_index, 'P&L'] = pnl
+    df.at[request.trade_index, 'Hold_Time'] = f"{hold_time:.1f}h"
+    
+    # Update portfolio size
+    portfolio_size = load_portfolio_size()
+    new_portfolio_size = portfolio_size + pnl
+    save_portfolio_size(new_portfolio_size)
+    
+    save_trades(df)
+    
+    return {
+        "message": "Trade closed successfully",
+        "pnl": pnl,
+        "new_portfolio_size": new_portfolio_size
+    }
+
+@app.post("/api/trades/partial-close")
+def partial_close_trade(request: PartialCloseRequest):
+    """Partially close a trade at TP"""
+    df = load_trades()
+    
+    if request.trade_index >= len(df) or request.trade_index < 0:
+        raise HTTPException(status_code=400, detail="Invalid trade index")
+    
+    trade = df.iloc[request.trade_index]
+    
+    if trade['Status'] != 'Open':
+        raise HTTPException(status_code=400, detail="Trade is already closed")
+    
+    # Calculate P&L for allocated portion
+    entry_price = trade['Entry']
+    direction = trade['Direction']
+    total_position_size = trade['Position_Size']
+    allocated_position_size = total_position_size * request.tp_allocation
+    
+    if direction == 'long':
+        pnl = (request.tp_price - entry_price) / entry_price * allocated_position_size
+    else:
+        pnl = (entry_price - request.tp_price) / entry_price * allocated_position_size
+    
+    # Update portfolio size
+    portfolio_size = load_portfolio_size()
+    new_portfolio_size = portfolio_size + pnl
+    save_portfolio_size(new_portfolio_size)
+    
+    # Update position size
+    remaining_position_size = total_position_size - allocated_position_size
+    
+    df.at[request.trade_index, 'Position_Size'] = remaining_position_size
+    df.at[request.trade_index, 'TP_Hit'] = True
+    df.at[request.trade_index, 'TP_Price'] = request.tp_price
+    
+    # Track hit TPs
+    hit_tps = json.loads(trade['Hit_TPs']) if trade['Hit_TPs'] else []
+    hit_tps.append(request.tp_index)
+    df.at[request.trade_index, 'Hit_TPs'] = json.dumps(hit_tps)
+    
+    # Update cumulative P&L
+    current_pnl = trade['P&L'] if pd.notna(trade['P&L']) else 0.0
+    df.at[request.trade_index, 'P&L'] = current_pnl + pnl
+    
+    # Check if should fully close
+    all_tps = json.loads(trade['TPs']) if trade['TPs'] else []
+    is_last_tp = (request.tp_index == len(all_tps) - 1) or (len(all_tps) == 1)
+    
+    if is_last_tp or remaining_position_size < total_position_size * 0.01:
+        # Close completely
+        if direction == 'long':
+            remaining_pnl = (request.tp_price - entry_price) / entry_price * remaining_position_size
+        else:
+            remaining_pnl = (entry_price - request.tp_price) / entry_price * remaining_position_size
+        
+        entry_date = pd.to_datetime(trade['Date'])
+        exit_date = datetime.now()
+        hold_time = (exit_date - entry_date).total_seconds() / 3600
+        
+        df.at[request.trade_index, 'Status'] = 'Closed'
+        df.at[request.trade_index, 'Exit_Price'] = request.tp_price
+        df.at[request.trade_index, 'P&L'] = current_pnl + pnl + remaining_pnl
+        df.at[request.trade_index, 'Hold_Time'] = f"{hold_time:.1f}h"
+    
+    save_trades(df)
+    
+    return {
+        "message": "TP hit - trade partially closed" if remaining_position_size > 0 else "TP hit - trade fully closed",
+        "pnl": pnl,
+        "remaining_position_size": remaining_position_size,
+        "new_portfolio_size": new_portfolio_size
+    }
+
+@app.post("/api/trades/stop-loss-hit")
+def stop_loss_hit(request: StopLossHitRequest):
+    """Handle stop loss hit - closes trade (or allocated portion)"""
+    df = load_trades()
+    
+    if request.trade_index >= len(df) or request.trade_index < 0:
+        raise HTTPException(status_code=400, detail="Invalid trade index")
+    
+    trade = df.iloc[request.trade_index]
+    
+    if trade['Status'] != 'Open':
+        raise HTTPException(status_code=400, detail="Trade is already closed")
+    
+    # Calculate P&L for allocated portion
+    entry_price = trade['Entry']
+    direction = trade['Direction']
+    total_position_size = trade['Position_Size']
+    allocated_position_size = total_position_size * request.sl_allocation
+    
+    if direction == 'long':
+        pnl = (request.sl_price - entry_price) / entry_price * allocated_position_size
+    else:
+        pnl = (entry_price - request.sl_price) / entry_price * allocated_position_size
+    
+    # Update portfolio size
+    portfolio_size = load_portfolio_size()
+    new_portfolio_size = portfolio_size + pnl
+    save_portfolio_size(new_portfolio_size)
+    
+    # Update position size
+    remaining_position_size = total_position_size - allocated_position_size
+    
+    df.at[request.trade_index, 'Position_Size'] = remaining_position_size
+    df.at[request.trade_index, 'SL_Hit'] = True
+    df.at[request.trade_index, 'SL_Price'] = request.sl_price
+    
+    # Update cumulative P&L
+    current_pnl = trade['P&L'] if pd.notna(trade['P&L']) else 0.0
+    df.at[request.trade_index, 'P&L'] = current_pnl + pnl
+    
+    # Check if should fully close
+    all_sls = json.loads(trade['SLs']) if trade['SLs'] else []
+    is_last_sl = (request.sl_index == len(all_sls) - 1) or (len(all_sls) == 1)
+    
+    # If this is the only SL or last SL, or if remaining position is very small, close completely
+    if is_last_sl or remaining_position_size < total_position_size * 0.01:
+        # Close completely
+        if direction == 'long':
+            remaining_pnl = (request.sl_price - entry_price) / entry_price * remaining_position_size
+        else:
+            remaining_pnl = (entry_price - request.sl_price) / entry_price * remaining_position_size
+        
+        entry_date = pd.to_datetime(trade['Date'])
+        exit_date = datetime.now()
+        hold_time = (exit_date - entry_date).total_seconds() / 3600
+        
+        df.at[request.trade_index, 'Status'] = 'Closed'
+        df.at[request.trade_index, 'Exit_Price'] = request.sl_price
+        df.at[request.trade_index, 'P&L'] = current_pnl + pnl + remaining_pnl
+        df.at[request.trade_index, 'Hold_Time'] = f"{hold_time:.1f}h"
+    
+    save_trades(df)
+    
+    return {
+        "message": "SL hit - trade partially closed" if remaining_position_size > 0 else "SL hit - trade fully closed",
+        "pnl": pnl,
+        "remaining_position_size": remaining_position_size,
+        "new_portfolio_size": new_portfolio_size
+    }
+
+@app.delete("/api/trades/clear")
+def clear_all_trades():
+    """Clear all trades from the CSV file"""
+    try:
+        # Create empty DataFrame with the correct columns
+        empty_df = pd.DataFrame(columns=JOURNAL_COLUMNS)
+        save_trades(empty_df)
+        
+        # Reset portfolio size to 0 or keep it - user's choice
+        # For now, we'll keep the portfolio size
+        
+        return {
+            "message": "All trades cleared successfully",
+            "trades_count": 0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing trades: {str(e)}")
+
+@app.delete("/api/trades/{trade_index}")
+def delete_trade(trade_index: int):
+    """Delete a trade by index"""
+    df = load_trades()
+    
+    if trade_index >= len(df) or trade_index < 0:
+        raise HTTPException(status_code=400, detail="Invalid trade index")
+    
+    # Delete the trade by dropping the row
+    df = df.drop(df.index[trade_index]).reset_index(drop=True)
+    save_trades(df)
+    
+    return {
+        "message": "Trade deleted successfully",
+        "trade_index": trade_index
+    }
+
+@app.post("/api/trades/import")
+async def import_trades(file: UploadFile = File(...)):
+    """Import trades from a CSV file"""
+    try:
+        # Check file extension
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="File must be a CSV file")
+        
+        # Read file content
+        contents = await file.read()
+        
+        # Try to read CSV
+        try:
+            # Try different encodings
+            try:
+                df = pd.read_csv(io.BytesIO(contents), encoding='utf-8')
+            except UnicodeDecodeError:
+                df = pd.read_csv(io.BytesIO(contents), encoding='latin-1')
+            
+            # Validate required columns exist
+            required_columns = ['Date', 'Asset', 'Direction', 'Entry', 'Position_Size', 'Status']
+            missing_columns = [col for col in required_columns if col not in df.columns]
+            if missing_columns:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"CSV file is missing required columns: {', '.join(missing_columns)}"
+                )
+            
+            # Ensure all required columns exist, add missing ones with defaults
+            for col in JOURNAL_COLUMNS:
+                if col not in df.columns:
+                    if col in ['TPs', 'SLs', 'Hit_TPs']:
+                        df[col] = [json.dumps([]) for _ in range(len(df))]
+                    elif col in ['TP_Hit', 'SL_Hit']:
+                        df[col] = False
+                    elif col in ['Entry', 'SL', 'Position_Size', 'Exit_Price', 'P&L']:
+                        df[col] = 0.0
+                    else:
+                        df[col] = None
+            
+            # Reorder columns to match expected format
+            df = df[JOURNAL_COLUMNS]
+            
+            # Save the imported trades
+            save_trades(df)
+            
+            # Count trades
+            total_trades = len(df)
+            open_trades = len(df[df['Status'] == 'Open']) if 'Status' in df.columns else 0
+            closed_trades = total_trades - open_trades
+            
+            return {
+                "message": "Trades imported successfully",
+                "total_trades": total_trades,
+                "open_trades": open_trades,
+                "closed_trades": closed_trades
+            }
+            
+        except pd.errors.EmptyDataError:
+            raise HTTPException(status_code=400, detail="CSV file is empty")
+        except pd.errors.ParserError as e:
+            raise HTTPException(status_code=400, detail=f"Error parsing CSV file: {str(e)}")
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error importing trades: {str(e)}")
+
+@app.post("/api/calculate/position-size")
+def calculate_position_size(request: PositionSizeRequest):
+    """Calculate position size based on risk (matching original logic)"""
+    portfolio_size = load_portfolio_size()
+    risk_pct = request.risk_percentage / 100 if request.risk_percentage else RISK_PCT
+    risk_amount = portfolio_size * risk_pct
+    
+    if request.entry_price == 0:
+        return {
+            "position_size_dollars": 0,
+            "position_size_units": 0,
+            "margin_required": 0,
+            "risk_amount": 0,
+            "message": "Please enter an entry price"
+        }
+    
+    # If no stop loss, calculate based on liquidation price
+    if request.stop_loss == 0 or request.stop_loss is None:
+        # Calculate liquidation price based on leverage
+        # For long: liquidation = entry * (1 - 1/leverage)
+        # For short: liquidation = entry * (1 + 1/leverage)
+        if request.direction.lower() == 'long':
+            liquidation_price = request.entry_price * (1 - 1 / request.leverage)
+        else:
+            liquidation_price = request.entry_price * (1 + 1 / request.leverage)
+        
+        # Calculate price difference to liquidation
+        price_diff = abs(request.entry_price - liquidation_price)
+        if price_diff == 0:
+            return {
+                "position_size_dollars": 0,
+                "position_size_units": 0,
+                "margin_required": 0,
+                "risk_amount": 0,
+                "message": "Invalid leverage"
+            }
+        
+        # Calculate liquidation percentage
+        liquidation_percentage = price_diff / request.entry_price
+        
+        # Calculate position size (notional value in dollars)
+        # This is: risk_amount / liquidation_percentage
+        position_size_dollars = risk_amount / liquidation_percentage
+        
+        # Calculate position size in coin units
+        position_size_units = position_size_dollars / request.entry_price
+        
+        # Calculate margin required (position size / leverage)
+        margin_required = position_size_dollars / request.leverage
+        
+        # Verify: position_size should equal margin_required × leverage
+        verified_position_size = margin_required * request.leverage
+        
+        return {
+            "position_size_dollars": position_size_dollars,
+            "position_size_units": position_size_units,
+            "margin_required": margin_required,
+            "risk_amount": risk_amount,
+            "sl_percentage": liquidation_percentage * 100,
+            "liquidation_price": liquidation_price,
+            "verification": f"${margin_required:,.2f} margin × {request.leverage}x = ${verified_position_size:,.2f} position",
+            "message": f"Margin: ${margin_required:,.2f} | Position: {position_size_units:.6f} units"
+        }
+    
+    # Traditional stop loss calculation
+    price_diff = abs(request.entry_price - request.stop_loss)
+    if price_diff == 0:
+        return {
+            "position_size_dollars": 0,
+            "position_size_units": 0,
+            "margin_required": 0,
+            "risk_amount": 0,
+            "message": "Stop loss cannot equal entry price"
+        }
+    
+    # Calculate stop loss percentage
+    sl_percentage = price_diff / request.entry_price
+    
+    # Calculate position size (notional value in dollars)
+    # This is: risk_amount / sl_percentage
+    position_size_dollars = risk_amount / sl_percentage
+    
+    # Calculate position size in coin units
+    position_size_units = position_size_dollars / request.entry_price
+    
+    # Calculate margin required (position size / leverage)
+    margin_required = position_size_dollars / request.leverage
+    
+    # Verify: position_size should equal margin_required × leverage
+    verified_position_size = margin_required * request.leverage
+    
+    return {
+        "position_size_dollars": position_size_dollars,
+        "position_size_units": position_size_units,
+        "margin_required": margin_required,
+        "risk_amount": risk_amount,
+        "sl_percentage": sl_percentage * 100,
+        "verification": f"${margin_required:,.2f} margin × {request.leverage}x = ${verified_position_size:,.2f} position",
+        "message": f"Margin: ${margin_required:,.2f} | Position: {position_size_units:.6f} units"
+    }
+
+class RiskRewardRequest(BaseModel):
+    entry_price: float
+    stop_loss: float
+    take_profits: List[TakeProfit]
+    direction: str
+
+@app.post("/api/calculate/risk-reward")
+def calculate_risk_reward(request: RiskRewardRequest):
+    """Calculate risk/reward ratio using trade calculator"""
+    if not request.take_profits or len(request.take_profits) == 0:
+        return {"rr_ratio": 0, "message": "No take profits set"}
+    
+    try:
+        # Convert TakeProfit objects to dicts for calculator
+        tp_dicts = [{"price": tp.price, "allocation": tp.allocation} for tp in request.take_profits]
+        
+        rr_ratio = trade_calc.calculate_rr_ratio(
+            entry_price=request.entry_price,
+            stop_loss=request.stop_loss,
+            take_profits=tp_dicts,
+            direction=request.direction
+        )
+        
+        return {
+            "rr_ratio": rr_ratio, 
+            "message": f"Risk/Reward: 1:{rr_ratio:.2f}" if rr_ratio > 0 else "Invalid setup"
+        }
+    except Exception as e:
+        return {"rr_ratio": 0, "message": f"Calculation error: {str(e)}"}
+
+class ProfitLossRequest(BaseModel):
+    entry_price: float
+    stop_loss: float
+    position_size: float
+    take_profits: List[TakeProfit]
+    stop_losses: List[StopLoss]
+    direction: str
+    leverage: Optional[float] = None
+
+@app.post("/api/calculate/profit-loss")
+def calculate_profit_loss(request: ProfitLossRequest):
+    """Calculate profit and loss amounts for TPs and SLs based on position size"""
+    if request.position_size <= 0:
+        return {
+            "take_profits": [],
+            "stop_losses": [],
+            "message": "Invalid position size"
+        }
+    
+    # Calculate total allocations
+    total_tp_allocation = sum(tp.allocation for tp in request.take_profits)
+    total_sl_allocation = sum(sl.allocation for sl in request.stop_losses)
+    
+    # Calculate profit amounts for take profits
+    tp_results = []
+    for i, tp in enumerate(request.take_profits):
+        if tp.price > 0:
+            # Calculate profit per unit
+            if request.direction == 'long':
+                profit_per_unit = tp.price - request.entry_price
+            else:
+                profit_per_unit = request.entry_price - tp.price
+            
+            # Normalize allocation if total doesn't equal 100%
+            if total_tp_allocation > 0:
+                normalized_allocation = tp.allocation / total_tp_allocation
+            else:
+                normalized_allocation = tp.allocation
+            
+            # Calculate allocated position size
+            allocated_position_size = request.position_size * normalized_allocation
+            
+            # Calculate position units
+            position_units = allocated_position_size / request.entry_price
+            
+            # Calculate profit amount
+            profit_amount = position_units * profit_per_unit
+            
+            tp_results.append({
+                "index": i,
+                "price": tp.price,
+                "allocation": tp.allocation,
+                "profit_amount": profit_amount,
+                "normalized_allocation": normalized_allocation
+            })
+    
+    # Calculate loss amounts for stop losses
+    sl_results = []
+    for i, sl in enumerate(request.stop_losses):
+        if sl.price > 0:
+            # Calculate loss per unit
+            if request.direction == 'long':
+                loss_per_unit = request.entry_price - sl.price
+            else:
+                loss_per_unit = sl.price - request.entry_price
+            
+            # Normalize allocation if total doesn't equal 100%
+            if total_sl_allocation > 0:
+                normalized_allocation = sl.allocation / total_sl_allocation
+            else:
+                normalized_allocation = sl.allocation
+            
+            # Calculate allocated position size
+            allocated_position_size = request.position_size * normalized_allocation
+            
+            # Calculate position units
+            position_units = allocated_position_size / request.entry_price
+            
+            # Calculate loss amount
+            loss_amount = position_units * loss_per_unit
+            
+            sl_results.append({
+                "index": i,
+                "price": sl.price,
+                "allocation": sl.allocation,
+                "loss_amount": loss_amount,
+                "normalized_allocation": normalized_allocation
+            })
+    
+    # If no stop losses are set, add liquidation loss (equal to margin)
+    if len(sl_results) == 0 and request.stop_loss == 0 and request.leverage and request.leverage > 0:
+        margin = request.position_size / request.leverage
+        sl_results.append({
+            "index": 0,
+            "price": 0,  # Liquidation price (not set)
+            "allocation": 1.0,
+            "loss_amount": margin,
+            "normalized_allocation": 1.0,
+            "is_liquidation": True
+            })
+    
+    return {
+        "take_profits": tp_results,
+        "stop_losses": sl_results,
+        "message": ""
+    }
+
+class TradeDetailsRequest(BaseModel):
+    """Request model for comprehensive trade calculation"""
+    portfolio_size: float
+    risk_percentage: float
+    entry_price: float
+    stop_loss: float
+    take_profits: List[TakeProfit]
+    leverage: float
+    direction: str
+    market_volume_24h: Optional[float] = 0
+    is_maker: Optional[bool] = False
+
+@app.post("/api/calculate/trade-details")
+def calculate_trade_details(request: TradeDetailsRequest):
+    """Calculate comprehensive trade details including fees and slippage"""
+    try:
+        # Convert TakeProfit objects to dicts
+        tp_dicts = [{"price": tp.price, "allocation": tp.allocation} for tp in request.take_profits]
+        
+        # Calculate complete trade details
+        details = trade_calc.calculate_complete_trade(
+            portfolio_size=request.portfolio_size,
+            risk_percentage=request.risk_percentage,
+            entry_price=request.entry_price,
+            stop_loss=request.stop_loss,
+            take_profits=tp_dicts,
+            leverage=request.leverage,
+            direction=request.direction,
+            market_volume_24h=request.market_volume_24h or 0,
+            is_maker=request.is_maker or False
+        )
+        
+        return {
+            "position_size_dollars": details.position_size_dollars,
+            "position_size_units": details.position_size_units,
+            "margin_required": details.margin_required,
+            "leverage": details.leverage,
+            "risk_amount": details.risk_amount,
+            "risk_percentage": details.risk_percentage,
+            "max_loss_amount": details.max_loss_amount,
+            "entry_price": details.entry_price,
+            "stop_loss": details.stop_loss,
+            "liquidation_price": details.liquidation_price,
+            "sl_distance_pct": details.sl_distance_pct * 100,
+            "slippage_pct": details.slippage_pct * 100,
+            "slippage_amount": details.slippage_amount,
+            "effective_entry": details.effective_entry,
+            "entry_fee": details.entry_fee,
+            "exit_fee": details.exit_fee,
+            "total_fees": details.total_fees,
+            "rr_ratio": details.rr_ratio,
+            "tp_levels": details.tp_levels,
+            "breakeven_price": details.breakeven_price,
+            "breakeven_distance_pct": details.breakeven_distance_pct * 100,
+            "message": f"R/R: 1:{details.rr_ratio:.2f} | Breakeven: ${details.breakeven_price:.2f}"
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "message": f"Calculation error: {str(e)}"
+        }
+
+@app.get("/api/analytics/overview")
+def get_analytics_overview():
+    """Get trading analytics overview"""
+    try:
+        df = load_trades()
+        if df.empty:
+            return {
+                "total_trades": 0,
+                "open_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "win_rate": 0,
+                "total_pnl": 0
+            }
+        
+        if 'Status' not in df.columns:
+            return {
+                "total_trades": len(df),
+                "open_trades": 0,
+                "winning_trades": 0,
+                "losing_trades": 0,
+                "win_rate": 0,
+                "total_pnl": 0
+            }
+        
+        closed_trades = df[df['Status'] == 'Closed']
+        open_trades_count = len(df[df['Status'] == 'Open'])
+        
+        total_trades = len(df)
+        
+        if len(closed_trades) > 0:
+            if 'P&L' in closed_trades.columns:
+                winning_trades = len(closed_trades[closed_trades['P&L'] > 0])
+                losing_trades = len(closed_trades[closed_trades['P&L'] < 0])
+                win_rate = (winning_trades / len(closed_trades)) * 100
+                total_pnl = closed_trades['P&L'].sum()
+            else:
+                winning_trades = 0
+                losing_trades = 0
+                win_rate = 0
+                total_pnl = 0
+        else:
+            winning_trades = 0
+            losing_trades = 0
+            win_rate = 0
+            total_pnl = 0
+        
+        return {
+            "total_trades": total_trades,
+            "open_trades": open_trades_count,
+            "winning_trades": winning_trades,
+            "losing_trades": losing_trades,
+            "win_rate": win_rate,
+            "total_pnl": total_pnl
+        }
+    except Exception as e:
+        print(f"Error in get_analytics_overview: {e}")
+        traceback.print_exc()
+        return {
+            "total_trades": 0,
+            "open_trades": 0,
+            "winning_trades": 0,
+            "losing_trades": 0,
+            "win_rate": 0,
+            "total_pnl": 0
+        }
+
+# ==================== Hyperliquid Exchange Integration ====================
+
+@app.get("/api/hyperliquid/status")
+def get_hyperliquid_status():
+    """Get Hyperliquid integration status"""
+    if not hl_client:
+        return {"enabled": False, "connected": False, "message": "Hyperliquid client not available"}
+    
+    return {
+        "enabled": hl_client.enabled,
+        "connected": hl_client.info_client is not None,
+        "testnet": hl_client.use_testnet if hl_client.enabled else None,
+        "wallet_address": hl_client.wallet_address if hl_client.enabled else None
+    }
+
+@app.get("/api/hyperliquid/price/{coin}")
+def get_hyperliquid_price(coin: str):
+    """Get current price for a coin"""
+    if not hl_client or not hl_client.enabled:
+        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
+    
+    price = hl_client.get_current_price(coin.upper())
+    if price is None:
+        raise HTTPException(status_code=404, detail=f"Price not available for {coin}")
+    
+    return {"coin": coin.upper(), "price": price, "timestamp": datetime.now().isoformat()}
+
+@app.get("/api/hyperliquid/positions")
+def get_hyperliquid_positions(coin: Optional[str] = None):
+    """Get open positions from Hyperliquid"""
+    if not hl_client or not hl_client.enabled:
+        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
+    
+    if not hl_client.wallet_address:
+        raise HTTPException(status_code=400, detail="Wallet address not configured")
+    
+    positions = hl_client.get_positions(coin.upper() if coin else None)
+    return {"positions": positions, "count": len(positions)}
+
+@app.get("/api/hyperliquid/assets")
+def get_hyperliquid_assets():
+    """Get available assets and their max leverage from Hyperliquid"""
+    if not hl_client or not hl_client.enabled:
+        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
+    
+    asset_data = hl_client.get_asset_metadata()
+    if asset_data is None:
+        raise HTTPException(status_code=500, detail="Failed to fetch asset metadata")
+    
+    # Format for frontend
+    assets = []
+    for name, data in asset_data.items():
+        assets.append({
+            "symbol": name,
+            "max_leverage": data["max_leverage"],
+            "sz_decimals": data["sz_decimals"],
+            "only_isolated": data["only_isolated"]
+        })
+    
+    return {"assets": assets, "count": len(assets)}
+
+class HyperliquidOrderRequest(BaseModel):
+    coin: str
+    is_buy: bool
+    margin_amount: float  # Margin in USD
+    leverage: int
+    entry_price: float
+    take_profits: Optional[List[Dict]] = []  # List of {price: float, allocation: float}
+    stop_losses: Optional[List[Dict]] = []    # List of {price: float, allocation: float}
+    is_isolated: bool = True
+
+@app.post("/api/hyperliquid/order")
+def place_hyperliquid_order(request: HyperliquidOrderRequest):
+    """Place a market order on Hyperliquid with built-in TP/SL"""
+    if not hl_client or not hl_client.enabled:
+        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
+    
+    if not hl_client.exchange_client:
+        raise HTTPException(status_code=400, detail="Exchange client not configured - check wallet credentials")
+    
+    try:
+        # Get current real-time price from Hyperliquid
+        current_price = hl_client.get_current_price(request.coin)
+        if current_price is None:
+            raise HTTPException(status_code=400, detail="Could not fetch current market price. Please try again.")
+        
+        print(f"[DEBUG] Using real-time price: {current_price} (frontend sent: {request.entry_price})")
+        
+        # Get asset metadata for szDecimals
+        asset_data = hl_client.get_asset_metadata()
+        sz_decimals = 5  # Default for most assets
+        if asset_data and request.coin in asset_data:
+            sz_decimals = asset_data[request.coin].get('sz_decimals', 5)
+        
+        # Calculate position size in coin units using real-time price
+        # Position Size = (Margin × Leverage) / Current Price
+        position_size_units = (request.margin_amount * request.leverage) / current_price
+        
+        # Round to the correct number of decimals for this asset
+        position_size_units = round(position_size_units, sz_decimals)
+        
+        print(f"Order: {request.coin} | Size: {position_size_units} | Leverage: {request.leverage}x | Margin: ${request.margin_amount:.2f}")
+        
+        # Place market order
+        # For market orders, we use the current price as limitPx with a small buffer
+        print(f"[DEBUG] is_buy={request.is_buy}, direction={'BUY' if request.is_buy else 'SELL'}")
+        limit_px = current_price * (1.002 if request.is_buy else 0.998)  # 0.2% buffer for market execution
+        
+        # Round price to valid tick size (whole dollars for BTC)
+        limit_px = round(limit_px, 0)
+        
+        print(f"Sending order: {request.coin} @ {limit_px} (size: {position_size_units})")
+        
+        # Prepare order type
+        order_type = {"limit": {"tif": "Ioc"}}  # Immediate-or-Cancel for market-like execution
+        
+        # Get first TP and SL prices from request
+        tp_price = None
+        sl_price = None
+        
+        print(f"[DEBUG] Received TPs: {request.take_profits}")
+        print(f"[DEBUG] Received SLs: {request.stop_losses}")
+        
+        if request.take_profits and len(request.take_profits) > 0:
+            tp_price = round(request.take_profits[0].get("price", 0), 0)
+            print(f"[DEBUG] TP price extracted: {tp_price}")
+            if tp_price <= 0:
+                tp_price = None
+        
+        if request.stop_losses and len(request.stop_losses) > 0:
+            sl_price = round(request.stop_losses[0].get("price", 0), 0)
+            print(f"[DEBUG] SL price extracted: {sl_price}")
+            if sl_price <= 0:
+                sl_price = None
+        
+        # Set leverage BEFORE placing the order (per-coin setting)
+        # Note: is_cross=True for cross margin, is_cross=False for isolated
+        try:
+            is_cross = not request.is_isolated  # is_isolated=True means NOT cross
+            hl_client.exchange_client.update_leverage(request.leverage, request.coin, is_cross)
+            margin_mode = "Cross" if is_cross else "Isolated"
+            print(f"[DEBUG] Set leverage to {request.leverage}x ({margin_mode}) for {request.coin}")
+        except Exception as e:
+            print(f"[WARNING] Could not set leverage: {e}")
+        
+        # Place the main order
+        result = hl_client.exchange_client.order(
+            name=request.coin,
+            is_buy=request.is_buy,
+            sz=position_size_units,
+            limit_px=limit_px,
+            order_type=order_type,
+            reduce_only=False,
+            cloid=None
+        )
+        
+        print(f"[DEBUG] Order result: {result}")
+        
+        # Check for errors in the response
+        if result and result.get("status") == "ok":
+            statuses = result.get("response", {}).get("data", {}).get("statuses", [])
+            if statuses and len(statuses) > 0:
+                if "error" in statuses[0]:
+                    error_msg = statuses[0]["error"]
+                    raise HTTPException(status_code=400, detail=f"Order failed: {error_msg}")
+        
+        # Check if order was successful
+        if result and result.get("status") == "ok":
+            # Place Take Profit orders
+            if request.take_profits and len(request.take_profits) > 0:
+                print(f"[DEBUG] Placing {len(request.take_profits)} Take Profit order(s)")
+                for tp in request.take_profits:
+                    try:
+                        tp_price = round(tp.get("price", 0), 0)
+                        allocation = tp.get("allocation", 0)
+                        if tp_price <= 0 or allocation <= 0:
+                            print(f"[WARNING] Skipping TP order - invalid price: {tp_price}, allocation: {allocation}")
+                            continue
+                        
+                        tp_size = round(position_size_units * allocation, sz_decimals)
+                        if tp_size <= 0:
+                            print(f"[WARNING] TP size too small: {tp_size}, skipping")
+                            continue
+                        
+                        tp_result = hl_client.exchange_client.order(
+                            name=request.coin,
+                            is_buy=not request.is_buy,
+                            sz=tp_size,
+                            limit_px=tp_price,
+                            order_type={"limit": {"tif": "Gtc"}},
+                            reduce_only=True,
+                            cloid=None
+                        )
+                        print(f"[DEBUG] TP order result: {tp_result}")
+                    except Exception as e:
+                        print(f"[WARNING] Failed to place TP order: {e}")
+            
+            # Place Stop Loss orders using Hyperliquid trigger orders
+            if request.stop_losses and len(request.stop_losses) > 0:
+                print(f"[DEBUG] Placing {len(request.stop_losses)} Stop Loss trigger order(s)")
+                for sl in request.stop_losses:
+                    try:
+                        sl_price = round(sl.get("price", 0), 0)
+                        allocation = sl.get("allocation", 1.0)
+                        if sl_price <= 0 or allocation <= 0:
+                            print(f"[WARNING] Skipping SL - invalid price: {sl_price}, allocation: {allocation}")
+                            continue
+                        
+                        # Calculate size to close
+                        sl_size = round(position_size_units * allocation, sz_decimals)
+                        if sl_size <= 0:
+                            print(f"[WARNING] SL size too small: {sl_size}, skipping")
+                            continue
+                        
+                        # Place stop order using the new method
+                        sl_result = hl_client.place_stop_order(
+                            coin=request.coin,
+                            is_buy=request.is_buy,
+                            size=sl_size,
+                            trigger_price=sl_price,
+                            is_long_position=request.is_buy  # is_buy=True means long
+                        )
+                        print(f"[DEBUG] SL order result: {sl_result}")
+                    except Exception as e:
+                        print(f"[WARNING] Failed to place SL order: {e}")
+            
+            return {
+                "status": "success",
+                "order_id": result.get("response", {}).get("data", {}).get("statuses", [{}])[0].get("resting", {}).get("oid", "unknown"),
+                "position_size": position_size_units,
+                "margin_used": request.margin_amount,
+                "leverage": request.leverage,
+                "message": f"Order placed: {position_size_units:.6f} {request.coin} at {request.leverage}x leverage"
+            }
+        else:
+            error_msg = result.get("response", "Unknown error") if result else "No response"
+            raise HTTPException(status_code=400, detail=f"Order failed: {error_msg}")
+            
+    except Exception as e:
+        print(f"[ERROR] Error placing order: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error placing order: {str(e)}")
+
+# ==================== WebSocket Price Feed ====================
+
+# In-memory storage for latest BTC price
+latest_btc_price = {"price": None, "timestamp": None}
+
+@app.get("/api/hyperliquid/ws-price")
+def get_ws_price():
+    """Get latest BTC price from WebSocket feed"""
+    if not hl_client or not hl_client.enabled:
+        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
+    
+    # For now, return REST API price (WebSocket will be implemented next)
+    price = hl_client.get_current_price("BTC")
+    if price:
+        latest_btc_price["price"] = price
+        latest_btc_price["timestamp"] = datetime.now().isoformat()
+    
+    return latest_btc_price
+
+if __name__ == "__main__":
+    import uvicorn
+    # Optimize for faster startup - use single worker, disable access log
+    uvicorn.run(
+        app, 
+        host="127.0.0.1", 
+        port=8000,
+        log_level="warning",  # Reduce logging overhead
+        access_log=False  # Disable access logs for faster startup
+    )
+

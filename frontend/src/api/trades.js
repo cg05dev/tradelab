@@ -1,0 +1,37 @@
+import api from './client'
+
+export const getTrades = () => api.get('/api/trades')
+export const getOpenTrades = () => api.get('/api/trades/open')
+export const getClosedTrades = () => api.get('/api/trades/closed')
+export const getTradeHistory = () => api.get('/api/trades')
+export const addTrade = (tradeData) => api.post('/api/trades', tradeData)
+export const closeTrade = (tradeIndex, exitPrice) => 
+  api.post('/api/trades/close', { trade_index: tradeIndex, exit_price: exitPrice })
+export const partialCloseTrade = (tradeIndex, tpPrice, tpAllocation, tpIndex) =>
+  api.post('/api/trades/partial-close', {
+    trade_index: tradeIndex,
+    tp_price: tpPrice,
+    tp_allocation: tpAllocation,
+    tp_index: tpIndex
+  })
+export const stopLossHit = (tradeIndex, slPrice, slAllocation, slIndex) =>
+  api.post('/api/trades/stop-loss-hit', {
+    trade_index: tradeIndex,
+    sl_price: slPrice,
+    sl_allocation: slAllocation,
+    sl_index: slIndex
+  })
+export const deleteTrade = (tradeIndex) =>
+  api.delete(`/api/trades/${tradeIndex}`)
+export const clearAllTrades = () =>
+  api.delete('/api/trades/clear')
+export const importTrades = (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post('/api/trades/import', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  })
+}
+
