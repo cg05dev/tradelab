@@ -31,3 +31,4 @@ Environment variables, external dependencies, and setup notes.
 
 - Project runs on WSL2 (Linux).
 - No Docker currently; local execution only.
+- **Virtual Environment Compatibility**: Python virtual environments are platform-specific. When switching between Windows and Linux/WSL environments, the venv must be recreated. On Linux, use: `cd backend && rm -rf venv && python3 -m venv venv && ./venv/bin/pip install -r requirements.txt`

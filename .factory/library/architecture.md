@@ -7,17 +7,17 @@ Architectural decisions, patterns discovered, and structural notes.
 
 ---
 
-## Current Architecture (Pre-Migration)
+## Current Architecture (Browser-Only)
 
 - **Frontend**: React + Vite + Tailwind, JSX (not TypeScript), no formal routing, no query caching.
 - **Backend**: FastAPI with CSV-based trade journal and Hyperliquid SDK integration.
-- **Desktop**: Electron wrapper (being removed in this mission).
+- **Deployment**: Local browser-only (Electron removed).
 
 ## Target Architecture
 
 - **Frontend**: React + Vite + TypeScript + TanStack Router + TanStack Query + Tailwind + shadcn/ui.
 - **Backend**: FastAPI with mode support (planning/live) and existing Hyperliquid integration.
-- **Deployment**: Local browser-only (no Electron, no cloud).
+- **Deployment**: Local browser-only (backend:8000 + frontend:3001).
 
 ## Key Patterns
 

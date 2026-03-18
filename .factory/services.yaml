@@ -7,7 +7,7 @@ commands:
 
 services:
   backend:
-    start: cd backend && python main.py
+    start: cd backend && ./venv/bin/python main.py
     stop: lsof -ti :8000 | xargs kill -9 2>/dev/null || true
     healthcheck: curl -sf http://localhost:8000/health
     port: 8000
