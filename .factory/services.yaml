@@ -1,0 +1,21 @@
+commands:
+  install: cd frontend && npm install
+  typecheck: cd frontend && npx tsc --noEmit
+  build: cd frontend && npm run build
+  test: echo "No test suite configured"
+  lint: cd frontend && npx eslint src --ext .ts,.tsx
+
+services:
+  backend:
+    start: cd backend && python main.py
+    stop: lsof -ti :8000 | xargs kill -9 2>/dev/null || true
+    healthcheck: curl -sf http://localhost:8000/health
+    port: 8000
+    depends_on: []
+
+  frontend:
+    start: cd frontend && npm run dev
+    stop: lsof -ti :3001 | xargs kill -9 2>/dev/null || true
+    healthcheck: curl -sf http://localhost:3001
+    port: 3001
+    depends_on: [backend]
