@@ -2,8 +2,6 @@
 
 A modern, clean trading journal application for tracking and analyzing cryptocurrency trades with comprehensive risk management and performance analytics.
 
-> **🚀 Quick Start**: Clone the repo, run `build_setup_exe.bat`, then double-click `TradeLab-Setup.exe`!
-
 ## Features
 
 - **Trade Planning**: Interactive interface for planning trades with real-time risk analysis
@@ -24,76 +22,59 @@ A modern, clean trading journal application for tracking and analyzing cryptocur
 
 ## Getting Started
 
-### Step 1: Clone the Repository
+### Prerequisites
 
-```bash
-git clone <repository-url>
-cd tradelab
-```
-
-### Step 2: Choose Your Setup Method
-
-**Option A: Build Setup Executable (Recommended for End Users)**
-
-1. **Build the setup executable:**
-   ```bash
-   build_setup_exe.bat
-   ```
-
-2. **Copy the executable to project root:**
-   - The executable is created in `dist\TradeLab-Setup.exe`
-   - Copy it to the project root (same folder as `backend` and `frontend`)
-
-3. **Run the setup:**
-   - Double-click `TradeLab-Setup.exe`
-   - It will install all dependencies and create a desktop shortcut
-   - Wait for setup to complete (~2-3 minutes)
-
-4. **Launch the app:**
-   - Double-click the "TradeLab" shortcut on your desktop
-   - Or run `start-tradelab-desktop.bat`
-
-**Option B: Manual Setup (For Developers)**
-
-If you prefer to set up manually or don't want to build the .exe:
-
-**Prerequisites:**
 - Python 3.8+ ([Download](https://www.python.org/downloads/))
 - Node.js 16+ ([Download](https://nodejs.org/))
 
-1. **Backend Setup:**
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone <repository-url>
+   cd tradelab
+   ```
+
+2. **Backend Setup:**
    ```bash
    cd backend
    python -m venv venv
-   venv\Scripts\activate  # On Windows
+   source venv/bin/activate  # On Linux/macOS
+   # or: venv\Scripts\activate  # On Windows
    pip install -r requirements.txt
    ```
 
-2. **Frontend Setup:**
+3. **Frontend Setup:**
    ```bash
    cd frontend
    npm install
    ```
 
-3. **Launch the app:**
-   ```bash
-   # From project root
-   start-tradelab-desktop.bat
-   ```
-   
-   Or for development mode:
-   ```bash
-   # Terminal 1: Start backend
-   cd backend
-   venv\Scripts\activate
-   python main.py
-   
-   # Terminal 2: Start frontend
-   cd frontend
-   npm run dev
-   ```
-   
-   The app will be available at `http://localhost:5173` (development) or as a desktop app (using the launcher)
+### Running the Application
+
+TradeLab runs as a browser-based application with a backend API server.
+
+**Terminal 1 - Start the Backend:**
+```bash
+cd backend
+source venv/bin/activate  # On Linux/macOS
+# or: venv\Scripts\activate  # On Windows
+python main.py
+```
+
+**Terminal 2 - Start the Frontend:**
+```bash
+cd frontend
+npm run dev
+```
+
+The application will be available at **http://localhost:3001**
+
+### Development
+
+- Backend API runs on `http://localhost:8000`
+- Frontend dev server runs on `http://localhost:3001`
+- API requests are proxied through Vite to the backend
 
 ## Project Structure
 
@@ -112,7 +93,6 @@ tradelab/
 │   │   └── App.jsx         # Main app component
 │   ├── package.json
 │   └── vite.config.js
-├── start-dev.bat           # Development launcher (Windows)
 └── README.md               # This file
 ```
 
@@ -135,28 +115,7 @@ tradelab/
 - `POST /api/calculate/risk-reward` - Calculate risk/reward ratio
 - `POST /api/calculate/profit-loss` - Calculate profit/loss
 
-## Development
-
-### Building Setup Executable
-
-To create `TradeLab-Setup.exe`:
-
-1. **Run the build script:**
-   ```bash
-   build_setup_exe.bat
-   ```
-
-2. **Copy the executable:**
-   - The executable will be created in `dist\TradeLab-Setup.exe`
-   - Copy it to the project root directory (same folder as `backend` and `frontend`)
-
-**Manual build:**
-```bash
-python -m pip install pyinstaller pywin32
-python -m PyInstaller --onefile --name "TradeLab-Setup" --console --icon "frontend\assets\icon.ico" setup.py
-```
-
-### Building for Production
+## Building for Production
 
 **Frontend:**
 ```bash

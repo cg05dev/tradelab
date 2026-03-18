@@ -3,14 +3,12 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: './', // Required for Electron
   server: {
     host: '127.0.0.1',
     port: 3001,
     strictPort: false,
-    // Optimize for faster startup
     hmr: {
-      overlay: false // Disable error overlay for faster startup
+      overlay: false
     },
     proxy: {
       '/api': {
@@ -23,7 +21,6 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
   },
-  // Optimize dependencies for faster startup
   optimizeDeps: {
     include: ['react', 'react-dom', 'axios']
   }
