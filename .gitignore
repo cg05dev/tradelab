@@ -55,3 +55,6 @@ tradelab-notes/
 backend/*.csv
 backend/*.json
 backend/**/*.json
+
+.factory/
+tradelab-notes/
