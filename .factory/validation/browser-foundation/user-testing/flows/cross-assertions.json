@@ -1,0 +1,74 @@
+{
+  "groupId": "cross-assertions",
+  "testedAt": "2026-03-19T01:05:00Z",
+  "isolation": {
+    "appUrl": "http://127.0.0.1:3002",
+    "backendApiUrl": "http://127.0.0.1:8000"
+  },
+  "toolsUsed": ["agent-browser", "curl"],
+  "assertions": [
+    {
+      "id": "VAL-CROSS-001",
+      "title": "First-load path reaches planner through normal navigation",
+      "status": "fail",
+      "steps": [
+        { "action": "Navigate to /", "expected": "Load application", "observed": "Welcome screen shown" },
+        { "action": "Setup portfolio", "expected": "Transition to main app", "observed": "Welcome remains visible after setup/refresh" }
+      ],
+      "evidence": {
+        "screenshots": ["browser-foundation/cross-assertions/VAL-CROSS-001-planner-ready.png", "browser-foundation/cross-assertions/VAL-CROSS-001-main-layout.png", "browser-foundation/cross-assertions/VAL-CROSS-001-post-reload.png"],
+        "consoleErrors": "none",
+        "network": "GET /api/portfolio -> 200"
+      },
+      "issues": "User remains at welcome screen even after portfolio setup."
+    },
+    {
+      "id": "VAL-CROSS-002",
+      "title": "Planning-mode startup-to-submit flow is safe",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Cannot reach main planner app (blocked by VAL-CROSS-001)."
+    },
+    {
+      "id": "VAL-CROSS-003",
+      "title": "Live-mode startup-to-execution flow is complete",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Cannot reach main planner app (blocked by VAL-CROSS-001)."
+    },
+    {
+      "id": "VAL-CROSS-004",
+      "title": "Live failure does not corrupt user-visible state",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Cannot reach main planner app (blocked by VAL-CROSS-001)."
+    },
+    {
+      "id": "VAL-CROSS-005",
+      "title": "API refactor remains UI-compatible through full journey",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Cannot reach main planner app (blocked by VAL-CROSS-001)."
+    }
+  ],
+  "frictions": [
+    {
+      "description": "API status appears inconsistent: /api/mode returns 404.",
+      "resolved": false,
+      "resolution": null,
+      "affectedAssertions": ["VAL-CROSS-001"]
+    }
+  ],
+  "blockers": [
+    {
+      "description": "Application fail to transition to main app after setting portfolio.",
+      "affectedAssertions": ["VAL-CROSS-001", "VAL-CROSS-002", "VAL-CROSS-003", "VAL-CROSS-004", "VAL-CROSS-005"],
+      "quickFixAttempted": "Verified PUT /api/portfolio returns 200, but app ignores transition."
+    }
+  ],
+  "summary": "Tested 5 assertions: 1 failed (VAL-CROSS-001), 4 blocked by the same navigation failure."
+}

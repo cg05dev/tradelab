@@ -85,7 +85,8 @@ class TradeCalculator:
     DEFAULT_MAKER_FEE = 0.0001   # 0.01%
     
     # Maintenance margin requirements (varies by exchange)
-    DEFAULT_MAINTENANCE_MARGIN = 0.005  # 0.5%
+    # Hyperliquid: MM = 1 / (2 * max_leverage), typically 1.25% for 40x assets like BTC
+    DEFAULT_MAINTENANCE_MARGIN = 0.0125  # 1.25% for BTC and major assets
     
     def __init__(self, 
                  taker_fee: float = DEFAULT_TAKER_FEE,

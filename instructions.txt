@@ -1,0 +1,34 @@
+I would first like for you to get a very deep understanding of this codebase and the tradelab app. I want you to understand why we built it and what it does. I would then like for you to build a mental model of this app in an obsidian note (this is where we will always reference and update while building this app). After you are satisfied with the level of understanding you have with this codebase and app I would like for you to review the rough draft of my plan and as you do so get a firm grasp of why I want to implement this and how it should be done. I want you to critique it, revise it, question it, and build a full image of what the task would look like successfully. As you do this I want you to keep expanding the mental model in obsidian whichever way you see fit, we can have multiple files or single. If you don't have the answer to anything you should research it to the best of your ability and conclude if you have the answer or not. 
+
+Here is the plans rough draft:
+
+We start with the framework for tradeab. We have a good foundation for an app.
+
+So far we have hyperliquid api implemented to route trades through, which seems to be working well.
+
+The next step would to research top perp trading dexs based on fee performance, liquidity depth, etc.
+And work on building more routes to other dexs.
+
+After we have a good handful of dexs we want to then work on building an ML that will figure out the best route for a perp trade based on multiple factors.
+
+So basically the user will come onto the app and then proceed to setup their trade, once they are ready to enter all they have to do is click a button and the ML will find the best route for their trade. The ML will determine the dex, whichever offers the user the best position.
+
+We will need to build a sophisticated swap, or I am sure there are apis for this stuff that we can use. We would also need to determine if the swaps are worth it or if they have too high slippage and stuff.
+
+This sounds like a pretty technical plan so we would really need to lay the framework out for it and make note of every edge case. 
+
+Also we would want to create a native token that the users would use to trade so that we can easily bridge/swap without having to deal with multiple different tokens. I think we would want to be based on SOL maybe, but I am not too sure what the best chain to be routing out of is and that offers the lowest fees. We probably also only want to accept certain coins only for now to, such as USDC, to swap to our native token. The native token will be ...
+
+We also have to deal with the fact that some DEX's are unavailable in some regions, but maybe we can still hit thier routing api's.
+
+Im thinking we may want to just start with one chain for now. I think the best chain to start on would be SOL, but am not positive, need to research. But if we started on one chain we could build the fundamentals and not have to worry about bridging and such. That can be a later feature. 
+
+We need to figure out what the best api's to use will be and also need to figure out our entire tech stach, db, cloud, security, etc. 
+
+Also we currently have tradelab as a desktop app, but we most likely will want this as a browser app so that users can easily connect their browser extension wallet.
+
+If we switch to a browser app we want to figure out the best UI/UX stack.
+
+Possible chains to implement (for the future): Solana, Eth, Sei, Polygon, Arbitrum 
+
+Possible DEX's to implement: DefiTuna (Sol), Humidifi (Sol), Drift (Sol), Bulletxyz (Sol), Ranger (Sol), Moncaco (Sei), Lighter (Arb). GMX (Arb)

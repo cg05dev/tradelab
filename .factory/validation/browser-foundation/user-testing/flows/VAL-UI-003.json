@@ -1,0 +1,38 @@
+{
+  "groupId": "VAL-UI-003",
+  "testedAt": "2026-03-19T01:30:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3001",
+    "backendApiUrl": "http://localhost:8000",
+    "portfolioReset": true
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": [
+    {
+      "id": "VAL-UI-003",
+      "title": "Portfolio setup success transitions into main app",
+      "status": "pass",
+      "steps": [
+        { "action": "Navigate to http://localhost:3001", "expected": "Welcome screen displayed", "observed": "Welcome screen displayed with portfolio input and Get Started button" },
+        { "action": "Enter portfolio size 10000 and click Get Started", "expected": "POST /api/portfolio -> 200, redirect to main layout", "observed": "Portfolio updated to 10000, UI navigated to /planner route" },
+        { "action": "Wait for navigation to complete", "expected": "Main trading layout visible", "observed": "Layout showing Planner, Open Trades, History, Analytics tabs and trade planning form" }
+      ],
+      "evidence": {
+        "screenshots": ["browser-foundation/user-testing/flows/evidence/VAL-UI-003-welcome-screen.png", "browser-foundation/user-testing/flows/evidence/VAL-UI-003-main-layout.png"],
+        "consoleErrors": "none",
+        "network": "GET /api/portfolio -> 200 (returns {portfolio_size: 0}), PUT /api/portfolio -> 200 (returns {portfolio_size: 10000.0, message: 'Portfolio size updated'})"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Initial API calls had double /api prefix (PUT /api/api/portfolio instead of /api/portfolio), causing portfolio updates to fail silently.",
+      "resolved": true,
+      "resolution": "Fixed frontend/src/api/portfolio.ts to use /portfolio, /portfolio, /portfolio/reset instead of /api/portfolio, /api/portfolio, /api/portfolio/reset since base URL is already /api",
+      "affectedAssertions": ["VAL-UI-003"]
+    }
+  ],
+  "blockers": [],
+  "summary": "Tested 1 assertion: 1 passed (VAL-UI-003). Portfolio setup flow now correctly transitions from welcome screen to main trading layout after successful portfolio update. Bug fixed: API endpoint path had duplicate /api prefix."
+}

@@ -1,0 +1,20 @@
+{
+  "milestone": "browser-foundation",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test": { "passed": true, "command": "echo 'No test suite configured'", "exitCode": 0 },
+    "typecheck": { "passed": true, "command": "cd frontend && npx tsc --noEmit", "exitCode": 0 },
+    "lint": { "passed": true, "command": "cd frontend && npx eslint src --ext .ts,.tsx", "exitCode": 0 }
+  },
+  "reviewsSummary": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": []
+}

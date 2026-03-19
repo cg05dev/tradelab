@@ -57,6 +57,8 @@ class TradeData(BaseModel):
     take_profits: List[TakeProfit]
     stop_losses: List[StopLoss]
     thesis: Optional[str] = None
+    margin: Optional[float] = None
+    leverage: Optional[int] = None
 
 class PositionSizeRequest(BaseModel):
     entry_price: float
@@ -90,9 +92,9 @@ CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'portfolio_config.json')
 RISK_PCT = 0.02
 
 JOURNAL_COLUMNS = [
-    'Date', 'Asset', 'Direction', 'Entry', 'SL', 'TPs', 'SLs', 'Position_Size', 
+    'Date', 'Asset', 'Direction', 'Entry', 'SL', 'TPs', 'SLs', 'Position_Size',
     'Confirmations', 'Thesis', 'Status', 'Exit_Price', 'P&L', 'Hold_Time',
-    'TP_Hit', 'TP_Price', 'SL_Hit', 'SL_Price', 'Hit_TPs'
+    'TP_Hit', 'TP_Price', 'SL_Hit', 'SL_Price', 'Hit_TPs', 'Margin', 'Leverage'
 ]
 
 def load_trades():
@@ -300,7 +302,9 @@ def add_trade(trade_data: TradeData):
             'TP_Price': None,
             'SL_Hit': False,
             'SL_Price': None,
-            'Hit_TPs': json.dumps([])
+            'Hit_TPs': json.dumps([]),
+            'Margin': float(trade_data.margin) if trade_data.margin is not None else float(trade_data.position_size) / int(trade_data.leverage) if trade_data.leverage else 0.0,
+            'Leverage': int(trade_data.leverage) if trade_data.leverage else 1
         }
         
         df = pd.concat([df, pd.DataFrame([new_trade])], ignore_index=True)
@@ -315,10 +319,11 @@ def close_trade(request: CloseTradeRequest):
     """Close a trade"""
     df = load_trades()
     
-    if request.trade_index >= len(df) or request.trade_index < 0:
-        raise HTTPException(status_code=400, detail="Invalid trade index")
+    # Use loc for actual DataFrame index (not positional)
+    if request.trade_index not in df.index:
+        raise HTTPException(status_code=400, detail=f"Invalid trade index: {request.trade_index}. Valid indices: {list(df.index)}")
     
-    trade = df.iloc[request.trade_index]
+    trade = df.loc[request.trade_index]
     
     if trade['Status'] != 'Open':
         raise HTTPException(status_code=400, detail="Trade is already closed")
@@ -361,10 +366,11 @@ def partial_close_trade(request: PartialCloseRequest):
     """Partially close a trade at TP"""
     df = load_trades()
     
-    if request.trade_index >= len(df) or request.trade_index < 0:
-        raise HTTPException(status_code=400, detail="Invalid trade index")
+    # Use loc for actual DataFrame index (not positional)
+    if request.trade_index not in df.index:
+        raise HTTPException(status_code=400, detail=f"Invalid trade index: {request.trade_index}. Valid indices: {list(df.index)}")
     
-    trade = df.iloc[request.trade_index]
+    trade = df.loc[request.trade_index]
     
     if trade['Status'] != 'Open':
         raise HTTPException(status_code=400, detail="Trade is already closed")
@@ -420,6 +426,11 @@ def partial_close_trade(request: PartialCloseRequest):
         df.at[request.trade_index, 'Exit_Price'] = request.tp_price
         df.at[request.trade_index, 'P&L'] = current_pnl + pnl + remaining_pnl
         df.at[request.trade_index, 'Hold_Time'] = f"{hold_time:.1f}h"
+        
+        # Update portfolio with remaining P&L
+        portfolio_size = load_portfolio_size()
+        new_portfolio_size = portfolio_size + remaining_pnl
+        save_portfolio_size(new_portfolio_size)
     
     save_trades(df)
     
@@ -435,10 +446,11 @@ def stop_loss_hit(request: StopLossHitRequest):
     """Handle stop loss hit - closes trade (or allocated portion)"""
     df = load_trades()
     
-    if request.trade_index >= len(df) or request.trade_index < 0:
-        raise HTTPException(status_code=400, detail="Invalid trade index")
+    # Use loc for actual DataFrame index (not positional)
+    if request.trade_index not in df.index:
+        raise HTTPException(status_code=400, detail=f"Invalid trade index: {request.trade_index}. Valid indices: {list(df.index)}")
     
-    trade = df.iloc[request.trade_index]
+    trade = df.loc[request.trade_index]
     
     if trade['Status'] != 'Open':
         raise HTTPException(status_code=400, detail="Trade is already closed")
@@ -490,6 +502,11 @@ def stop_loss_hit(request: StopLossHitRequest):
         df.at[request.trade_index, 'Exit_Price'] = request.sl_price
         df.at[request.trade_index, 'P&L'] = current_pnl + pnl + remaining_pnl
         df.at[request.trade_index, 'Hold_Time'] = f"{hold_time:.1f}h"
+        
+        # Update portfolio with remaining P&L
+        portfolio_size = load_portfolio_size()
+        new_portfolio_size = portfolio_size + remaining_pnl
+        save_portfolio_size(new_portfolio_size)
     
     save_trades(df)
     
@@ -1232,6 +1249,183 @@ def get_ws_price():
         latest_btc_price["timestamp"] = datetime.now().isoformat()
     
     return latest_btc_price
+
+@app.post("/api/hyperliquid/close/{coin}")
+def close_hyperliquid_position(coin: str):
+    """Close all positions for a given coin via market order and return fill price"""
+    if not hl_client:
+        raise HTTPException(status_code=503, detail="Hyperliquid client not initialized")
+    
+    # Ensure client is initialized
+    hl_client._ensure_initialized()
+    
+    if not hl_client.enabled:
+        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
+
+    if not hl_client.exchange_client:
+        raise HTTPException(status_code=400, detail="Exchange client not configured - check wallet credentials")
+
+    try:
+        coin = coin.upper()
+        
+        print(f"[DEBUG] Wallet address being used: {hl_client.wallet_address}")
+        
+        # Debug: Get all positions to see what's available
+        all_positions = hl_client.get_positions(None)
+        print(f"[DEBUG] All positions: {all_positions}")
+        
+        # Check for specific position
+        positions = hl_client.get_positions(coin)
+        print(f"[DEBUG] Positions for {coin}: {positions}")
+        
+        if not positions or len(positions) == 0:
+            # If no position found, check if maybe the coin format is different
+            # Try to find matching position
+            for pos in all_positions:
+                pos_coin = pos.get('coin', '')
+                if coin in pos_coin or pos_coin in coin:
+                    print(f"[INFO] Found position with coin '{pos_coin}' matching '{coin}'")
+                    # Use the actual coin name from Hyperliquid
+                    coin = pos_coin
+                    positions = [pos]
+                    break
+            
+            if not positions or len(positions) == 0:
+                # List available positions in error message
+                available_coins = [p.get('coin') for p in all_positions]
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"No open position found for {coin}. Available positions: {available_coins}"
+                )
+        
+        position = positions[0]
+        actual_coin = position.get('coin', coin)
+        print(f"[INFO] Closing position for {actual_coin}: size={position.get('size')}, entry=${position.get('entry_price')}")
+        
+        # Close the position using the actual coin name from Hyperliquid
+        result = hl_client.market_close(actual_coin)
+        print(f"[DEBUG] market_close result: {result}")
+        
+        # Wait 2 seconds for the order to be processed
+        print(f"[DEBUG] Waiting 2 seconds for position close to be confirmed...")
+        time.sleep(2)
+        
+        # Verify position was actually closed by checking again
+        print(f"[DEBUG] Checking if position was actually closed...")
+        positions_after = hl_client.get_positions(actual_coin)
+        print(f"[DEBUG] Positions after market_close: {positions_after}")
+        
+        # If position still exists, try alternative close method using market order
+        if positions_after and len(positions_after) > 0:
+            print(f"[WARN] Position still exists after market_close! Trying alternative close method...")
+            
+            # Get current position details
+            remaining_position = positions_after[0]
+            remaining_size = remaining_position.get('size', 0)
+            position_direction = remaining_position.get('direction', 'long')
+            
+            print(f"[DEBUG] Remaining position: size={remaining_size}, direction={position_direction}")
+            
+            # Get current market price for the opposite trade
+            current_price = hl_client.get_current_price(actual_coin)
+            
+            if current_price and remaining_size > 0:
+                # Determine if we need to buy or sell to close
+                # If position is long (size > 0), we need to sell (is_buy=False)
+                # If position is short (size < 0), we need to buy (is_buy=True)
+                is_buy_to_close = position_direction == 'short'
+                
+                print(f"[DEBUG] Attempting alternative close: is_buy={is_buy_to_close}, size={abs(remaining_size)}, price={current_price}")
+                
+                # Place a market order to close the remaining position
+                try:
+                    alt_result = hl_client.exchange_client.order(
+                        name=actual_coin,
+                        is_buy=is_buy_to_close,
+                        sz=abs(remaining_size),
+                        limit_px=round(current_price * (1.002 if is_buy_to_close else 0.998), 0),  # Small buffer
+                        order_type={"limit": {"tif": "Ioc"}},  # Immediate-or-Cancel
+                        reduce_only=True,
+                        cloid=None
+                    )
+                    print(f"[DEBUG] Alternative close result: {alt_result}")
+                    
+                    # Wait another 2 seconds and verify again
+                    time.sleep(2)
+                    positions_final = hl_client.get_positions(actual_coin)
+                    print(f"[DEBUG] Positions after alternative close: {positions_final}")
+                    
+                    if positions_final and len(positions_final) > 0:
+                        print(f"[ERROR] Position STILL exists after alternative close attempt!")
+                    else:
+                        print(f"[INFO] Alternative close succeeded - position is now closed")
+                        # Update result to show success
+                        result = alt_result
+                except Exception as alt_error:
+                    print(f"[ERROR] Alternative close method failed: {alt_error}")
+                    import traceback
+                    traceback.print_exc()
+        else:
+            print(f"[INFO] Position successfully closed with market_close method")
+        
+        if result and result.get("status") == "error":
+            error_msg = result.get("message", "Unknown error")
+            raise HTTPException(status_code=400, detail=f"Close position failed: {error_msg}")
+        
+        # Parse the fill price from the response
+        fill_price = None
+        statuses = []
+        print(f"[DEBUG] Full result structure: {result}")
+        
+        if result and result.get("status") == "ok":
+            # Try to get filled price from response - multiple possible formats
+            response_data = result.get("response", {})
+            print(f"[DEBUG] Response data: {response_data}")
+            
+            # Try format 1: response.data.statuses[0].filled.avgPx
+            if isinstance(response_data, dict):
+                data = response_data.get("data", {})
+                statuses = data.get("statuses", [])
+                if statuses and len(statuses) > 0:
+                    filled_data = statuses[0].get("filled", {})
+                    avg_px = filled_data.get("avgPx")
+                    if avg_px:
+                        fill_price = float(avg_px)
+                        print(f"[INFO] Got fill price from statuses[0].filled.avgPx: ${fill_price}")
+            
+            # Try format 2: response.data.statuses[0].totalSz (calculate avg price)
+            if not fill_price and statuses:
+                total_sz = statuses[0].get("totalSz")
+                if total_sz and total_sz > 0:
+                    # Use the close price as approximation
+                    fill_price = hl_client.get_current_price(actual_coin)
+                    print(f"[INFO] Using current price as fill price (filled {total_sz} units): ${fill_price}")
+            
+            # Try format 3: direct avgPx in result
+            if not fill_price and "avgPx" in result:
+                fill_price = float(result["avgPx"])
+                print(f"[INFO] Got fill price from result.avgPx: ${fill_price}")
+        
+        if not fill_price:
+            # Fallback to current market price if we can't get fill price
+            fill_price = hl_client.get_current_price(actual_coin)
+            print(f"[WARN] Could not extract fill price from result, using current price: ${fill_price}")
+
+        return {
+            "status": "success",
+            "coin": actual_coin,
+            "fill_price": fill_price,
+            "result": result,
+            "message": f"Position closed for {actual_coin} at ${fill_price:.2f}"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Error closing position: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error closing position: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

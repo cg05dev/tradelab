@@ -1,34 +1,13 @@
-# User Testing
+## Validation Concurrency
 
-Testing surface, resource cost classification, and validation notes.
+- **Surface: Web UI** (browser-based testing)
+  - Max concurrent validators: 2
 
-**What belongs here:** Testing surface definitions, resource constraints, isolation strategies, gotchas discovered during validation.
-**What does NOT belong here:** Service commands (use `services.yaml`), general architecture (use `architecture.md`).
+## Flow Validator Guidance: Web UI
 
----
-
-## Testing Surface
-
-| Surface | Resource Cost | Notes |
-|---------|---------------|-------|
-| Browser app | Low | Frontend only; fast to load |
-| Backend API | Low | FastAPI; quick startup |
-| Hyperliquid execution | High | Requires live credentials; use planning mode for most tests |
-| Full trading flow | Medium | Backend + frontend + mode interactions |
-
-## Isolation Strategy
-
-- **Planning mode tests**: Safe to run without Hyperliquid credentials; no live orders.
-- **Live mode tests**: Require Hyperliquid testnet or mainnet credentials; use sparingly.
-- **Cross-area flows**: Test planning mode first; live mode only for critical paths.
-
-## Testing Constraints
-
-- Browser automation required for UI validation.
-- Backend must be running for API calls.
-- Frontend dev server must be running for browser tests.
-
-## Gotchas
-
-- Hyperliquid API has rate limits; avoid rapid repeated calls in tests.
-- Mode state persists across backend restarts; reset to planning before tests if needed.
+- **Isolation Boundaries**:
+  - Each validator should be assigned a distinct `portfolio_config.json` or equivalent if they need to test disparate portfolio states, or they should use consistent setup to reset the state between runs.
+  - Avoid shared global state mutations that can't be isolated; serialize these tests.
+  - Each validator should independently verify core shell stability, navigation, and API contract compliance.
+  - The browser session must be closed by the validator at the end of its run.
+  - Port 3001 is fixed for the frontend; ensure testers handle navigation and state cleanly.

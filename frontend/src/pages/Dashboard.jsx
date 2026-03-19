@@ -142,28 +142,24 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Main Grid: PlanTrade + OpenTrades/TradeHistory */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Layout: PlanTrade + OpenTrades */}
+        <div className="space-y-6">
           
-          {/* Left: Plan Trade */}
-          <div className="lg:col-span-2 border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
+          {/* Plan Trade Section */}
+          <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
             <PlanTrade onTradeAdded={handleTradeAdded} />
           </div>
 
-          {/* Right: Open Trades & Trade History */}
-          <div className="lg:col-span-1 space-y-6">
-            
-            {/* Open Trades */}
-            <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
-              <OpenTrades key={refreshKey} ref={openTradesRef} />
-            </div>
-
-            {/* Trade History */}
-            <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
-              <TradeHistory />
-            </div>
-            
+          {/* Open Trades Section - Full Width */}
+          <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
+            <OpenTrades key={refreshKey} ref={openTradesRef} />
           </div>
+
+          {/* Trade History Section - Full Width */}
+          <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
+            <TradeHistory />
+          </div>
+          
         </div>
         
       </div>

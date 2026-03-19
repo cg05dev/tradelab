@@ -78,12 +78,22 @@ class HyperliquidClient:
             if self._wallet_address and self._private_key:
                 # Create wallet from private key (required by SDK)
                 wallet = eth_account.Account.from_key(self._private_key)
+                derived_address = wallet.address
+                env_address = self._wallet_address
+                
+                print(f"[DEBUG] ENV wallet address: {env_address}")
+                print(f"[DEBUG] Derived wallet address from private key: {derived_address}")
+                print(f"[DEBUG] Addresses match: {env_address.lower() == derived_address.lower()}")
+                
+                # Use checksum address from wallet object (not the raw env var)
+                self._wallet_address = derived_address
                 self._exchange_client = Exchange(
                     wallet,  # First param: wallet object
                     base_url,  # Second param: base URL
                     account_address=self._wallet_address  # Keyword arg
                 )
                 print(f"[OK] Exchange client connected for {self._wallet_address[:10]}...")
+                print(f"[INFO] Using checksum address: {self._wallet_address}")
             else:
                 print("[INFO] Info client only (no trading credentials provided)")
             
@@ -196,20 +206,38 @@ class HyperliquidClient:
         """Get open positions"""
         self._ensure_initialized()
         
-        if not self._info_client or not self._wallet_address:
+        if not self._info_client:
+            print("[ERROR] get_positions: Info client not initialized")
+            return []
+        
+        if not self._wallet_address:
+            print("[ERROR] get_positions: Wallet address not set")
             return []
         
         try:
+            print(f"[DEBUG] Fetching user_state for wallet: {self._wallet_address}")
             user_state = self._info_client.user_state(self._wallet_address)
+            print(f"[DEBUG] user_state response: {user_state}")
             
-            if not user_state or 'assetPositions' not in user_state:
+            if not user_state:
+                print("[ERROR] user_state is None")
                 return []
             
+            if 'assetPositions' not in user_state:
+                print(f"[ERROR] 'assetPositions' not in user_state. Keys: {user_state.keys()}")
+                return []
+            
+            asset_positions = user_state.get('assetPositions', [])
+            print(f"[DEBUG] assetPositions count: {len(asset_positions)}")
+            print(f"[DEBUG] assetPositions: {asset_positions}")
+            
             positions = []
-            for pos_data in user_state.get('assetPositions', []):
+            for pos_data in asset_positions:
                 position = pos_data.get('position', {})
+                print(f"[DEBUG] Processing position: {position}")
                 
                 if coin and position.get('coin') != coin:
+                    print(f"[DEBUG] Skipping position, coin mismatch: {position.get('coin')} != {coin}")
                     continue
                 
                 positions.append({
@@ -223,10 +251,13 @@ class HyperliquidClient:
                     'max_leverage': float(position.get('maxLeverage', 0))
                 })
             
+            print(f"[DEBUG] Returning {len(positions)} positions")
             return positions
             
         except Exception as e:
-            print(f"Error getting positions: {e}")
+            print(f"[ERROR] Error getting positions: {e}")
+            import traceback
+            traceback.print_exc()
             return []
     
     def place_stop_order(self, coin: str, is_buy: bool, size: float, trigger_price: float, is_long_position: bool) -> Dict:
@@ -300,6 +331,22 @@ class HyperliquidClient:
             
         except Exception as e:
             print(f"[ERROR] Error placing stop order: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"status": "error", "message": str(e)}
+
+    def market_close(self, coin: str) -> Dict:
+        """Close all positions for a given coin via market order"""
+        self._ensure_initialized()
+
+        if not self._exchange_client or not self._wallet_address or not self._private_key:
+            return {"status": "error", "message": "Exchange client not configured"}
+
+        try:
+            result = self._exchange_client.market_close(coin)
+            return result
+        except Exception as e:
+            print(f"[ERROR] Error closing position for {coin}: {e}")
             import traceback
             traceback.print_exc()
             return {"status": "error", "message": str(e)}
