@@ -12,3 +12,9 @@ export const getHyperliquidAssets = () => api.get('/api/hyperliquid/assets')
 export const placeHyperliquidOrder = (orderData: HyperliquidOrderRequest) => api.post('/api/hyperliquid/order', orderData)
 export const closeHyperliquidPosition = (coin: string) => api.post(`/api/hyperliquid/close/${coin}`, {})
 
+// Mode API
+export interface ModeResponse { mode: 'planning' | 'live' }
+export const getMode = () => api.get<ModeResponse>('/api/mode')
+export interface SetModeRequest { mode: 'planning' | 'live' }
+export const setMode = (mode: 'planning' | 'live') => api.post<ModeResponse>('/api/mode', { mode })
+

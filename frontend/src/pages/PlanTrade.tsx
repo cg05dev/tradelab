@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addTrade } from '../api/trades'
 import { getPortfolio } from '../api/portfolio'
-import { getHyperliquidPrice, placeHyperliquidOrder, getHyperliquidAssets } from '../api/hyperliquid'
+import { getHyperliquidPrice, placeHyperliquidOrder, getHyperliquidAssets, getMode } from '../api/hyperliquid'
 import { getErrorMessage } from '../api/error'
 import type { HyperliquidAsset, TakeProfit, TradeDetails } from '../types'
 
@@ -31,6 +31,8 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     refetchOnWindowFocus: false,
     retry: 1,
   })
+
+  const modeQuery = useQuery({ queryKey: ['mode'], queryFn: async () => (await getMode()).data?.mode ?? 'planning' })
 
   useEffect(() => {
     if (typeof priceQuery.data === 'number') setCurrentPrice(priceQuery.data)
@@ -94,6 +96,10 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
 
   const executeMutation = useMutation({
     mutationFn: async () => {
+      const mode = modeQuery.data
+      if (mode === 'planning') {
+        throw { error: 'mode_blocked', mode: 'planning' as const, reason: 'Trading is in planning mode. Switch to live mode to execute real trades.' }
+      }
       if (!asset || !currentPrice) throw new Error('Please select an asset first')
       const validTPs: TakeProfit[] = takeProfits.filter((tp): tp is TakeProfit => tp.price > 0).map(tp => ({ price: tp.price, allocation: tp.allocation / 100 }))
       await addTrade({
