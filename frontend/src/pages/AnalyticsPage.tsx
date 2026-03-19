@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { getAnalyticsMetrics, getPnlSeries } from '../api/analytics'
 import { getClosedTrades, getClosedTradesCount } from '../api/trades'
+import type { Trade } from '../types'
 
 const TIMEFRAMES = [
   { label: 'All', value: 'all' },
@@ -29,14 +31,14 @@ export default function AnalyticsPage() {
     queryFn: async () => (await getClosedTrades({ asset: asset || undefined, search: search || undefined, sort, page, limit })).data ?? { trades: [] },
   })
 
-  const trades = tradesQuery.data?.trades ?? []
+  const trades = (tradesQuery.data?.trades ?? []) as Trade[]
   const totalCount = countQuery.data ?? tradesQuery.data?.count ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / limit))
 
   const assets = useMemo(() => {
     const values = new Set<string>()
-    trades.forEach((trade: any) => { if (trade.Asset) values.add(trade.Asset) })
-    return Array.from(values)
+    trades.forEach((trade) => { if (trade.Asset) values.add(trade.Asset) })
+    return Array.from(values).sort()
   }, [trades])
 
   return (
@@ -77,30 +79,49 @@ export default function AnalyticsPage() {
           <h2 className="text-lg font-semibold text-white">Trade History</h2>
           <div className="text-sm text-neutral-400">{totalCount} total trades</div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <select value={asset} onChange={(e) => { setAsset(e.target.value); setPage(1) }} className="rounded-lg bg-black border border-neutral-700 px-3 py-2 text-sm text-white"><option value="">All Assets</option>{assets.map((a) => <option key={a} value={a}>{a}</option>)}</select>
-          <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} placeholder="Search asset or notes" className="rounded-lg bg-black border border-neutral-700 px-3 py-2 text-sm text-white placeholder-neutral-500" />
-          <select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1) }} className="rounded-lg bg-black border border-neutral-700 px-3 py-2 text-sm text-white"><option value="date_desc">Date: Newest</option><option value="date_asc">Date: Oldest</option><option value="pnl_desc">P&L: High to Low</option><option value="pnl_asc">P&L: Low to High</option></select>
-          <div className="text-sm text-neutral-400 flex items-center">Page {page} of {totalPages}</div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+          <label className="rounded-lg bg-black border border-neutral-700 px-3 py-2 text-sm text-white flex items-center gap-2">
+            <span className="text-neutral-500 text-xs uppercase tracking-wide">Asset</span>
+            <select value={asset} onChange={(e) => { setAsset(e.target.value); setPage(1) }} className="w-full bg-transparent outline-none"><option value="">All Assets</option>{assets.map((a) => <option key={a} value={a}>{a}</option>)}</select>
+          </label>
+          <label className="rounded-lg bg-black border border-neutral-700 px-3 py-2 text-sm text-white flex items-center gap-2">
+            <span className="text-neutral-500 text-xs uppercase tracking-wide">Date Range</span>
+            <input type="date" value="" readOnly className="w-full bg-transparent outline-none opacity-50" aria-label="Date range filter coming soon" />
+          </label>
+          <label className="rounded-lg bg-black border border-neutral-700 px-3 py-2 text-sm text-white flex items-center gap-2">
+            <span className="text-neutral-500 text-xs uppercase tracking-wide">P&amp;L Sort</span>
+            <select value={sort} onChange={(e) => { setSort(e.target.value); setPage(1) }} className="w-full bg-transparent outline-none"><option value="date_desc">Date: Newest</option><option value="date_asc">Date: Oldest</option><option value="pnl_desc">P&amp;L: High to Low</option><option value="pnl_asc">P&amp;L: Low to High</option></select>
+          </label>
+          <label className="rounded-lg bg-black border border-neutral-700 px-3 py-2 text-sm text-white flex items-center gap-2">
+            <Search className="h-4 w-4 text-neutral-500" />
+            <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} placeholder="Search trades" className="w-full bg-transparent outline-none placeholder-neutral-500" />
+          </label>
         </div>
         <div className="space-y-3">
-          {trades.length === 0 ? <div className="text-sm text-neutral-500">No trades found</div> : trades.map((trade: any, index: number) => (
+          {trades.length === 0 ? <div className="rounded-lg border border-dashed border-neutral-700 p-6 text-sm text-neutral-500 text-center">No trades match the selected filters.</div> : trades.map((trade, index) => (
             <div key={`${trade._index ?? index}`} className="rounded-lg border border-neutral-700 bg-black/40 p-4 flex items-center justify-between gap-4">
               <div>
                 <div className="text-white font-medium">{trade.Asset}</div>
                 <div className="text-xs text-neutral-500">{trade.Date} · {trade.Thesis || 'No notes'}</div>
               </div>
-              <div className={(trade['P&L'] ?? 0) >= 0 ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>{Number(trade['P&L'] ?? 0).toFixed(2)}</div>
+              <div className={(trade['P&L'] ?? 0) >= 0 ? 'text-green-400 font-semibold' : 'text-red-400 font-semibold'}>{formatCurrency(trade['P&L'] ?? 0)}</div>
             </div>
           ))}
         </div>
-        <div className="flex items-center justify-between">
-          <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-300 disabled:opacity-40">Previous</button>
-          <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-300 disabled:opacity-40">Next</button>
-        </div>
+        {totalCount > limit && (
+          <div className="flex items-center justify-between">
+            <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-300 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Previous</button>
+            <div className="text-sm text-neutral-400">Page {page} of {totalPages}</div>
+            <button disabled={page >= totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))} className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-300 disabled:opacity-40">Next <ChevronRight className="h-4 w-4" /></button>
+          </div>
+        )}
       </section>
     </div>
   )
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value)
 }
 
 function MetricCard({ label, value, negative = false }: { label: string; value: number | string; negative?: boolean }) {
