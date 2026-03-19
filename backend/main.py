@@ -132,6 +132,42 @@ def save_portfolio_size(size):
     with open(CONFIG_FILE, 'w') as f:
         json.dump({'portfolio_size': size}, f)
 
+def load_mode():
+    """Load trading mode from config, defaults to 'planning' if not set or invalid"""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+                mode = config.get('mode', 'planning')
+                # Validate mode
+                if mode in ('planning', 'live'):
+                    return mode
+                else:
+                    # Invalid mode, default to planning and persist corrected config
+                    print(f"[WARNING] Invalid mode '{mode}' in config, defaulting to 'planning'")
+                    config['mode'] = 'planning'
+                    with open(CONFIG_FILE, 'w') as f:
+                        json.dump(config, f)
+                    return 'planning'
+        return 'planning'
+    except Exception as e:
+        print(f"[WARNING] Error loading mode: {e}, defaulting to 'planning'")
+        return 'planning'
+
+def save_mode(mode):
+    """Save trading mode to config"""
+    try:
+        if os.path.exists(CONFIG_FILE):
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+        else:
+            config = {}
+        config['mode'] = mode
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f)
+    except Exception as e:
+        print(f"[ERROR] Error saving mode: {e}")
+
 def clean_trade_data(df):
     """Clean DataFrame by replacing NaN, inf, -inf with None and converting to dict"""
     # Replace NaN, inf, -inf with None for JSON serialization
@@ -197,6 +233,26 @@ def update_portfolio(request: UpdatePortfolioRequest):
         raise HTTPException(status_code=400, detail="Portfolio size cannot be negative")
     save_portfolio_size(request.portfolio_size)
     return {"portfolio_size": request.portfolio_size, "message": "Portfolio size updated"}
+
+class ModeUpdateRequest(BaseModel):
+    mode: str
+
+@app.get("/api/mode")
+def get_mode():
+    """Get current trading mode"""
+    return {"mode": load_mode()}
+
+@app.post("/api/mode")
+def update_mode(request: ModeUpdateRequest):
+    """Update trading mode"""
+    valid_modes = ['planning', 'live']
+    if request.mode not in valid_modes:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid mode '{request.mode}'. Valid modes are: {', '.join(valid_modes)}"
+        )
+    save_mode(request.mode)
+    return {"mode": request.mode, "message": f"Mode updated to '{request.mode}'"}
 
 @app.get("/api/trades")
 def get_trades():
