@@ -1,13 +1,16 @@
-## Validation Concurrency
+# Validation Concurrency
 
-- **Surface: Web UI** (browser-based testing)
-  - Max concurrent validators: 2
+- **Web UI**: Concurrency limit is 1. (Browser automation is resource intensive; serial execution is stable for the UI flow validations).
+- **Backend API**: Concurrency limit is 3.
 
 ## Flow Validator Guidance: Web UI
+- Surface: Browser UI (Agent Browser)
+- Isolation: Each flow validator subagent should be assigned a fresh browser session (via --session).
+- Do not access global state unless it's for setup. Tests should assume the initial state (Welcome if portfolio unset, planner if set).
+- Ensure services are healthy before starting individual subagent flow.
+- Reset the state between tests if the flow makes changes (use API clear routes if available).
 
-- **Isolation Boundaries**:
-  - Each validator should be assigned a distinct `portfolio_config.json` or equivalent if they need to test disparate portfolio states, or they should use consistent setup to reset the state between runs.
-  - Avoid shared global state mutations that can't be isolated; serialize these tests.
-  - Each validator should independently verify core shell stability, navigation, and API contract compliance.
-  - The browser session must be closed by the validator at the end of its run.
-  - Port 3001 is fixed for the frontend; ensure testers handle navigation and state cleanly.
+## Flow Validator Guidance: Backend API
+- Surface: Backend API (cURL)
+- Isolation: Tests can run concurrently if they do not depend on the exact trade history or if they use `clear_all_trades` endpoint for isolation at the start of the test.
+- Coordinate with other validators to ensure they aren't working on the same global portfolio variable if testing mode toggle/persistence.

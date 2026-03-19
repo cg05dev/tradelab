@@ -1,0 +1,89 @@
+{
+  "groupId": "mode-api",
+  "testedAt": "2026-03-19T01:25:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3001",
+    "backendUrl": "http://localhost:8000",
+    "dataDirectory": "/home/christian/dev/tradelab/backend"
+  },
+  "toolsUsed": ["curl"],
+  "assertions": [
+    {
+      "id": "VAL-MODE-001",
+      "title": "Mode status API exists and defaults to planning",
+      "status": "fail",
+      "steps": [
+        { "action": "GET /api/mode", "expected": "200 OK", "observed": "404 Not Found" }
+      ],
+      "evidence": {
+        "screenshots": [],
+        "consoleErrors": "none",
+        "network": "GET /api/mode -> 404 Not Found"
+      },
+      "issues": "The backend does not implement the /api/mode endpoint, rendering all mode-based assertions unverifiable."
+    },
+    {
+      "id": "VAL-MODE-002",
+      "title": "Mode switch API accepts valid values",
+      "status": "blocked",
+      "steps": [],
+      "evidence": { "screenshots": [], "consoleErrors": "none", "network": "none" },
+      "issues": "Blocked by failure of VAL-MODE-001: Required /api/mode endpoint does not exist."
+    },
+    {
+      "id": "VAL-MODE-003",
+      "title": "Mode switch rejects invalid values",
+      "status": "blocked",
+      "steps": [],
+      "evidence": { "screenshots": [], "consoleErrors": "none", "network": "none" },
+      "issues": "Blocked by failure of VAL-MODE-001: Required /api/mode endpoint does not exist."
+    },
+    {
+      "id": "VAL-MODE-005",
+      "title": "Mode persists across backend restart",
+      "status": "blocked",
+      "steps": [],
+      "evidence": { "screenshots": [], "consoleErrors": "none", "network": "none" },
+      "issues": "Blocked by failure of VAL-MODE-001: Required /api/mode endpoint does not exist."
+    },
+    {
+      "id": "VAL-MODE-006",
+      "title": "Planning mode blocks execution endpoints",
+      "status": "blocked",
+      "steps": [],
+      "evidence": { "screenshots": [], "consoleErrors": "none", "network": "none" },
+      "issues": "Blocked by failure of VAL-MODE-001: Required /api/mode endpoint does not exist."
+    },
+    {
+      "id": "VAL-MODE-007",
+      "title": "Planning mode allows non-execution endpoints",
+      "status": "fail",
+      "steps": [
+        { "action": "GET /api/portfolio", "expected": "200 OK", "observed": "200 OK" }
+      ],
+      "evidence": {
+        "screenshots": [],
+        "consoleErrors": "none",
+        "network": "GET /api/portfolio -> 200"
+      },
+      "issues": "While non-execution endpoints work, we cannot verify if they are specifically allowed in 'planning mode' as the mode switch functionality is missing."
+    },
+    {
+      "id": "VAL-MODE-011",
+      "title": "Invalid persisted mode falls back safely",
+      "status": "blocked",
+      "steps": [],
+      "evidence": { "screenshots": [], "consoleErrors": "none", "network": "none" },
+      "issues": "Blocked by failure of VAL-MODE-001: Required /api/mode endpoint does not exist."
+    }
+  ],
+  "frictions": [],
+  "blockers": [
+    {
+      "description": "Backend lacks the required /api/mode endpoint for mode switching and validation.",
+      "affectedAssertions": ["VAL-MODE-001", "VAL-MODE-002", "VAL-MODE-003", "VAL-MODE-005", "VAL-MODE-006", "VAL-MODE-011"],
+      "quickFixAttempted": "Verified endpoint with curl, returned 404."
+    }
+  ],
+  "summary": "Required /api/mode endpoint does not exist, blocking primary assertion tests. Non-execution endpoints are functional but cannot be verified within the context of specific modes."
+}

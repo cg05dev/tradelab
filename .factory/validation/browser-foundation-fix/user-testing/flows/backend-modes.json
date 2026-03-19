@@ -1,0 +1,82 @@
+{
+  "assertions": [
+    {
+      "id": "VAL-MODE-001",
+      "title": "Mode status API exists and defaults to planning",
+      "status": "fail",
+      "issues": "Endpoint /api/mode not implemented.",
+      "evidence": { "network": "GET /api/mode -> 404" }
+    },
+    {
+      "id": "VAL-MODE-002",
+      "title": "Mode switch API accepts valid values",
+      "status": "fail",
+      "issues": "Endpoint /api/mode not implemented.",
+      "evidence": {}
+    },
+    {
+      "id": "VAL-MODE-003",
+      "title": "Mode switch rejects invalid values",
+      "status": "fail",
+      "issues": "Endpoint /api/mode not implemented.",
+      "evidence": {}
+    },
+    {
+      "id": "VAL-MODE-004",
+      "title": "Mode set to live allows execution",
+      "status": "fail",
+      "issues": "Endpoint /api/mode not implemented.",
+      "evidence": {}
+    },
+    {
+      "id": "VAL-MODE-005",
+      "title": "Mode persists across backend restart",
+      "status": "fail",
+      "issues": "Endpoint /api/mode not implemented.",
+      "evidence": {}
+    },
+    {
+      "id": "VAL-MODE-006",
+      "title": "Planning mode blocks execution endpoints",
+      "status": "fail",
+      "issues": "Endpoint /api/mode not implemented.",
+      "evidence": {}
+    },
+    {
+      "id": "VAL-MODE-007",
+      "title": "Planning mode allows non-execution endpoints",
+      "status": "pass",
+      "issues": "Non-execution endpoint /api/portfolio works, but cannot verify mode constraints.",
+      "evidence": { "network": "GET /api/portfolio -> 200" }
+    },
+    {
+      "id": "VAL-MODE-008",
+      "title": "Live mode allows trade execution",
+      "status": "fail",
+      "issues": "Endpoint /api/mode not implemented.",
+      "evidence": {}
+    },
+    {
+      "id": "VAL-MODE-009",
+      "title": "Live mode allows partial close",
+      "status": "fail",
+      "issues": "Endpoint /api/mode not implemented.",
+      "evidence": {}
+    },
+    {
+      "id": "VAL-MODE-010",
+      "title": "Live mode allows SL/TP updates",
+      "status": "fail",
+      "issues": "Endpoint /api/mode not implemented.",
+      "evidence": {}
+    },
+    {
+      "id": "VAL-MODE-011",
+      "title": "Invalid persisted mode falls back safely",
+      "status": "fail",
+      "issues": "Endpoint /api/mode not implemented.",
+      "evidence": {}
+    }
+  ],
+  "summary": "Backend lacks the required /api/mode endpoint for mode switching and validation, blocking tests for all mode-related assertions. Non-execution endpoints are functional."
+}

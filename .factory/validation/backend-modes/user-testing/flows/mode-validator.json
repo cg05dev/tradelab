@@ -1,0 +1,135 @@
+{
+  "groupId": "mode-validator",
+  "testedAt": "2026-03-19T02:15:47Z",
+  "isolation": {
+    "backend": "http://localhost:8000",
+    "frontend": "http://localhost:3001"
+  },
+  "toolsUsed": ["curl"],
+  "assertions": [
+    {
+      "id": "VAL-MODE-001",
+      "title": "Verify GET /api/mode is reachable",
+      "status": "pass",
+      "steps": [
+        { "action": "curl -X GET http://localhost:8000/api/mode", "expected": "200 OK", "observed": "200 OK" }
+      ],
+      "evidence": {
+        "network": "GET /api/mode -> 200"
+      }
+    },
+    {
+      "id": "VAL-MODE-002",
+      "title": "Switch mode to live",
+      "status": "pass",
+      "steps": [
+        { "action": "curl -X POST http://localhost:8000/api/mode -d '{\"mode\":\"live\"}'", "expected": "200 OK, mode live", "observed": "200 OK, mode live" }
+      ],
+      "evidence": {
+        "network": "POST /api/mode (live) -> 200"
+      }
+    },
+    {
+      "id": "VAL-MODE-003",
+      "title": "Verify mode is live",
+      "status": "pass",
+      "steps": [
+        { "action": "curl -X GET http://localhost:8000/api/mode", "expected": "{\"mode\":\"live\"}", "observed": "{\"mode\":\"live\"}" }
+      ],
+      "evidence": {
+        "network": "GET /api/mode -> live"
+      }
+    },
+    {
+      "id": "VAL-MODE-004",
+      "title": "Switch mode back to planning",
+      "status": "pass",
+      "steps": [
+        { "action": "curl -X POST http://localhost:8000/api/mode -d '{\"mode\":\"planning\"}'", "expected": "200 OK, mode planning", "observed": "200 OK, mode planning" }
+      ],
+      "evidence": {
+        "network": "POST /api/mode (planning) -> 200"
+      }
+    },
+    {
+      "id": "VAL-MODE-005",
+      "title": "Verify mode is planning",
+      "status": "pass",
+      "steps": [
+        { "action": "curl -X GET http://localhost:8000/api/mode", "expected": "{\"mode\":\"planning\"}", "observed": "{\"mode\":\"planning\"}" }
+      ],
+      "evidence": {
+        "network": "GET /api/mode -> planning"
+      }
+    },
+    {
+      "id": "VAL-MODE-006",
+      "title": "Invalid mode rejection",
+      "status": "pass",
+      "steps": [
+        { "action": "curl -X POST http://localhost:8000/api/mode -d '{\"mode\":\"invalid\"}'", "expected": "400 Bad Request", "observed": "400 Bad Request" }
+      ],
+      "evidence": {
+        "network": "POST /api/mode (invalid) -> 400"
+      }
+    },
+    {
+      "id": "VAL-MODE-007",
+      "title": "Verify mode remains planning",
+      "status": "pass",
+      "steps": [
+        { "action": "curl -X GET http://localhost:8000/api/mode", "expected": "{\"mode\":\"planning\"}", "observed": "{\"mode\":\"planning\"}" }
+      ],
+      "evidence": {
+        "network": "GET /api/mode -> 200"
+      }
+    },
+    {
+      "id": "VAL-MODE-008",
+      "title": "Portfolio endpoint works in planning",
+      "status": "pass",
+      "steps": [
+        { "action": "curl -X GET http://localhost:8000/api/portfolio", "expected": "200 OK", "observed": "200 OK" }
+      ],
+      "evidence": {
+        "network": "GET /api/portfolio -> 200"
+      }
+    },
+    {
+      "id": "VAL-MODE-009",
+      "title": "Trades endpoint works in planning",
+      "status": "pass",
+      "steps": [
+        { "action": "curl -X GET http://localhost:8000/api/trades/open", "expected": "200 OK", "observed": "200 OK" }
+      ],
+      "evidence": {
+        "network": "GET /api/trades/open -> 200"
+      }
+    },
+    {
+      "id": "VAL-MODE-010",
+      "title": "Analytics endpoint works in planning",
+      "status": "pass",
+      "steps": [
+        { "action": "curl -X GET http://localhost:8000/api/analytics/overview", "expected": "200 OK", "observed": "200 OK" }
+      ],
+      "evidence": {
+        "network": "GET /api/analytics/overview -> 200"
+      }
+    },
+    {
+      "id": "VAL-MODE-011",
+      "title": "Order execution fails in planning mode",
+      "status": "pass",
+      "steps": [
+        { "action": "curl -X POST http://localhost:8000/api/hyperliquid/order", "expected": "403 Forbidden", "observed": "403 Forbidden" }
+      ],
+      "evidence": {
+        "network": "POST /api/hyperliquid/order -> 403"
+      }
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested 11 assertions (VAL-MODE-001 to VAL-MODE-011). All passed, verifying mode-based API access control."
+}

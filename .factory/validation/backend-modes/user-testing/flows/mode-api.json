@@ -1,0 +1,114 @@
+{
+  "groupId": "mode-api",
+  "testedAt": "2026-03-19T01:25:00Z",
+  "isolation": {
+    "baseUrl": "http://localhost:3001",
+    "backendUrl": "http://localhost:8000"
+  },
+  "toolsUsed": ["curl"],
+  "assertions": [
+    {
+      "id": "VAL-MODE-001",
+      "title": "Mode status API exists",
+      "status": "fail",
+      "steps": [
+        { "action": "GET /api/mode", "expected": "200 return planning", "observed": "404 Not Found" }
+      ],
+      "evidence": {
+        "screenshots": [],
+        "consoleErrors": "none",
+        "network": "GET /api/mode -> 404"
+      },
+      "issues": "API endpoint /api/mode does not exist in backend implementation"
+    },
+    {
+      "id": "VAL-MODE-002",
+      "title": "Mode switch API accepts valid values",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Prerequisite VAL-MODE-001 failed"
+    },
+    {
+      "id": "VAL-MODE-003",
+      "title": "Mode switch rejects invalid values",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Prerequisite VAL-MODE-001 failed"
+    },
+    {
+      "id": "VAL-MODE-004",
+      "title": "Mode switch takes effect immediately",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Prerequisite VAL-MODE-001 failed"
+    },
+    {
+      "id": "VAL-MODE-005",
+      "title": "Mode persists across backend restart",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Prerequisite VAL-MODE-001 failed"
+    },
+    {
+      "id": "VAL-MODE-006",
+      "title": "Planning mode blocks execution",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Prerequisite VAL-MODE-001 failed"
+    },
+    {
+      "id": "VAL-MODE-007",
+      "title": "Planning mode allows read-only",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Prerequisite VAL-MODE-001 failed"
+    },
+    {
+      "id": "VAL-MODE-008",
+      "title": "Live mode permits execution",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Prerequisite VAL-MODE-001 failed"
+    },
+    {
+      "id": "VAL-MODE-009",
+      "title": "Live execution failure returns structured error",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Prerequisite VAL-MODE-001 failed"
+    },
+    {
+      "id": "VAL-MODE-010",
+      "title": "Switching to live does not auto-execute",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Prerequisite VAL-MODE-001 failed"
+    },
+    {
+      "id": "VAL-MODE-011",
+      "title": "Invalid persisted mode falls back safely",
+      "status": "blocked",
+      "steps": [],
+      "evidence": {},
+      "issues": "Prerequisite VAL-MODE-001 failed"
+    }
+  ],
+  "frictions": [],
+  "blockers": [
+    {
+      "description": "Backend does not implement any mode persistence or switching logic; /api/mode endpoint is missing (404).",
+      "affectedAssertions": ["VAL-MODE-001", "VAL-MODE-002", "VAL-MODE-003", "VAL-MODE-004", "VAL-MODE-005", "VAL-MODE-006", "VAL-MODE-007", "VAL-MODE-008", "VAL-MODE-009", "VAL-MODE-010", "VAL-MODE-011"],
+      "quickFixAttempted": "Verified API route definition in backend/main.py"
+    }
+  ],
+  "summary": "Tested VAL-MODE-001 through VAL-MODE-011. All are blocked because the backend API does not currently support mode status or switching."
+}
