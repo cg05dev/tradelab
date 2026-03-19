@@ -1,0 +1,65 @@
+{
+  "groupId": "paper-live-validator",
+  "testedAt": "2026-03-19T02:08:00Z",
+  "isolation": {
+    "url": "http://localhost:3001/trade",
+    "mode": "paper/live"
+  },
+  "toolsUsed": ["agent-browser", "curl"],
+  "assertions": [
+    {
+      "id": "VAL-MODE-001",
+      "title": "Mode toggles between 'paper' and 'live'. UI update and API call succeed.",
+      "status": "pass",
+      "steps": [
+        { "action": "Click Toggle trading mode", "expected": "Mode updates", "observed": "Mode updates" }
+      ],
+      "evidence": {
+        "screenshots": ["paper-live-mode/paper-live-validator/VAL-MODE-initial.png", "paper-live-mode/paper-live-validator/VAL-MODE-toggled-paper.png"],
+        "consoleErrors": "none",
+        "network": "POST /api/mode -> 200"
+      }
+    },
+    {
+      "id": "VAL-MODE-002",
+      "title": "In Paper mode, placing a trade uses trades.csv (Note: initial testing suggests persistent storage might be shared or improperly routed).",
+      "status": "fail",
+      "steps": [
+        { "action": "Place trade in planning mode", "expected": "Update trades_paper.csv", "observed": "Updates trades.csv" }
+      ],
+      "evidence": {
+        "network": "POST /api/trades -> 200"
+      },
+      "issues": "Trade placed in planning mode was recorded in trades.csv, not trades_paper.csv as expected by requirements."
+    },
+    {
+      "id": "VAL-MODE-003",
+      "title": "In Live mode, placing a trade uses trades.csv.",
+      "status": "pass",
+      "steps": [
+        { "action": "Place trade in live mode", "expected": "Update trades.csv", "observed": "Updates trades.csv" }
+      ],
+      "evidence": {
+        "network": "POST /api/trades -> 200"
+      }
+    },
+    {
+      "id": "VAL-MODE-004",
+      "title": "Execute Trade button color updates.",
+      "status": "pass",
+      "steps": [
+        { "action": "Verify button color", "expected": "Green", "observed": "Measured button CSS color green" }
+      ],
+      "evidence": {
+        "screenshots": ["paper-live-mode/paper-live-validator/VAL-MODE-refresh-live.png"]
+      }
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Appears both paper and live modes record trades in trades.csv.",
+      "resolved": false
+    }
+  ],
+  "summary": "Verified mode toggling and UI color coding. Trade storage for paper mode appears incorrectly routed to trades.csv instead of trades_paper.csv."
+}

@@ -1,0 +1,78 @@
+{
+  "groupId": "analytics-group",
+  "testedAt": "2026-03-19T14:48:00Z",
+  "isolation": {
+    "appUrl": "http://localhost:3001",
+    "missionDir": "/home/christian/.factory/missions/9b54f391-6b9b-4816-b8a5-e5ce7b6bd4e0"
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": [
+    {
+      "id": "VAL-ANALYTICS-001",
+      "title": "Performance Overview Section",
+      "status": "pass",
+      "steps": [
+        { "action": "Navigate to /analytics", "expected": "Analytics page loaded", "observed": "Analytics page loaded" }
+      ],
+      "evidence": {
+        "screenshots": ["analytics-page/analytics-group/VAL-ANALYTICS-001-overview.png"],
+        "consoleErrors": "none",
+        "network": "none"
+      }
+    },
+    {
+      "id": "VAL-ANALYTICS-002",
+      "title": "Timeframe Selector Options",
+      "status": "pass",
+      "steps": [
+        { "action": "View timeframe selector", "expected": "Options displayed", "observed": "All, 7D, 30D, 90D, YTD, 1Y displayed" }
+      ],
+      "evidence": {
+        "screenshots": ["analytics-page/analytics-group/VAL-ANALYTICS-002-timeframes.png"],
+        "consoleErrors": "none",
+        "network": "none"
+      }
+    },
+    {
+      "id": "VAL-ANALYTICS-003",
+      "title": "Timeframe Selection Updates Metrics",
+      "status": "pass",
+      "steps": [
+        { "action": "Click 7D", "expected": "Metrics update", "observed": "Metrics updated" }
+      ],
+      "evidence": {
+        "screenshots": ["analytics-page/analytics-group/VAL-ANALYTICS-003-timeframe-change.png"],
+        "consoleErrors": "none",
+        "network": "none"
+      }
+    },
+    {
+      "id": "VAL-CROSS-002",
+      "title": "Tab Navigation Works",
+      "status": "pass",
+      "steps": [
+        { "action": "Click Trade tab", "expected": "Redirected to /trade", "observed": "Redirected to /trade" },
+        { "action": "Click Analytics tab", "expected": "Redirected to /analytics", "observed": "Redirected to /analytics" }
+      ],
+      "evidence": {
+        "screenshots": ["analytics-page/analytics-group/VAL-CROSS-002-trade-tab.png", "analytics-page/analytics-group/VAL-CROSS-002-analytics-tab.png"],
+        "consoleErrors": "none",
+        "network": "none"
+      }
+    }
+  ],
+  "frictions": [
+    {
+      "description": "Exploration of cross-area flows (VAL-CROSS-003) blocked by unidentified element interactions between tabs.",
+      "resolved": false,
+      "affectedAssertions": ["VAL-CROSS-003", "VAL-CROSS-006"]
+    }
+  ],
+  "blockers": [
+    {
+      "description": "Several features like Assets, P&L Sort, and Date range filter appear to be either not fully implemented or require further setup not described in the test instructions.",
+      "affectedAssertions": ["VAL-ANALYTICS-009", "VAL-ANALYTICS-010", "VAL-ANALYTICS-011", "VAL-ANALYTICS-012", "VAL-ANALYTICS-013"]
+    }
+  ],
+  "summary": "Verified core analytics navigation and basic timeframe functionality. Several advanced features are not fully implemented or blocked."
+}

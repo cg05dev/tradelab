@@ -1,0 +1,73 @@
+{
+  "groupId": "paper-live-mode",
+  "testedAt": "2026-03-19T02:15:00Z",
+  "isolation": {
+    "url": "http://localhost:3002",
+    "backend": "http://localhost:8000"
+  },
+  "toolsUsed": ["agent-browser"],
+  "assertions": [
+    {
+      "id": "VAL-MODE-001",
+      "title": "Mode persistent",
+      "status": "pass",
+      "steps": [
+        { "action": "Navigate to /", "expected": "Page loads", "observed": "Page loaded" },
+        { "action": "Toggle mode", "expected": "Mode updates", "observed": "Mode updated" },
+        { "action": "Navigate to Analytics and back", "expected": "Mode persists", "observed": "Mode persisted" }
+      ],
+      "evidence": {
+        "screenshots": ["paper-live-mode/VAL-MODE-001-initial.png", "paper-live-mode/VAL-MODE-003-toggled.png"],
+        "consoleErrors": "none",
+        "network": "none"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-MODE-002",
+      "title": "Mode trade storage routing",
+      "status": "fail",
+      "steps": [
+        { "action": "Switch to Paper mode", "expected": "Mode set", "observed": "Mode set" },
+        { "action": "Execute trade", "expected": "Trade saved in trades_paper.csv", "observed": "Trade saved in trades.csv" }
+      ],
+      "evidence": {
+        "screenshots": ["paper-live-mode/VAL-MODE-002-executed.png"],
+        "consoleErrors": "none",
+        "network": "POST /api/execute -> 200"
+      },
+      "issues": "Trade executed in paper mode was incorrectly saved in the live trades.csv file instead of trades_paper.csv."
+    },
+    {
+      "id": "VAL-MODE-003",
+      "title": "Toggle UI state/colors",
+      "status": "pass",
+      "steps": [
+        { "action": "Click toggle", "expected": "UI updates", "observed": "UI updated" }
+      ],
+      "evidence": {
+        "screenshots": ["paper-live-mode/VAL-MODE-003-toggled.png"],
+        "consoleErrors": "none",
+        "network": "none"
+      },
+      "issues": null
+    },
+    {
+      "id": "VAL-MODE-004",
+      "title": "Open trades filtering",
+      "status": "pass",
+      "steps": [
+        { "action": "Navigate to Analytics", "expected": "Trades filtered by mode", "observed": "Trades appear filtered" }
+      ],
+      "evidence": {
+        "screenshots": ["paper-live-mode/VAL-MODE-004-analytics.png"],
+        "consoleErrors": "none",
+        "network": "none"
+      },
+      "issues": null
+    }
+  ],
+  "frictions": [],
+  "blockers": [],
+  "summary": "Tested mode switching, persistence, and trade storage routing. Mode switching and UI toggling work, but trade storage routing is broken (VAL-MODE-002): paper trades are still being written to the main trades.csv."
+}

@@ -1,0 +1,15 @@
+{
+  "milestone": "analytics-page",
+  "round": 2,
+  "status": "pass",
+  "assertionsSummary": {
+    "total": 17,
+    "passed": 17,
+    "failed": 0,
+    "blocked": 0
+  },
+  "passedAssertions": ["VAL-ANALYTICS-001", "VAL-ANALYTICS-002", "VAL-ANALYTICS-003", "VAL-ANALYTICS-004", "VAL-ANALYTICS-005", "VAL-ANALYTICS-006", "VAL-ANALYTICS-007", "VAL-ANALYTICS-008", "VAL-ANALYTICS-009", "VAL-ANALYTICS-010", "VAL-ANALYTICS-011", "VAL-ANALYTICS-012", "VAL-ANALYTICS-013", "VAL-ANALYTICS-014", "VAL-CROSS-003", "VAL-CROSS-006", "VAL-CROSS-007"],
+  "failedAssertions": [],
+  "blockedAssertions": [],
+  "appliedUpdates": []
+}

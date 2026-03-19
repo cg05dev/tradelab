@@ -1,0 +1,19 @@
+{
+  "milestone": "paper-live-mode",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 4,
+    "passed": 3,
+    "failed": 1,
+    "blocked": 0
+  },
+  "passedAssertions": ["VAL-MODE-001", "VAL-MODE-003", "VAL-MODE-004"],
+  "failedAssertions": [
+    { "id": "VAL-MODE-002", "reason": "Trade placed in paper mode was recorded in trades.csv, not trades_paper.csv as expected by requirements. Fixed in main.py." }
+  ],
+  "blockedAssertions": [],
+  "appliedUpdates": [
+    { "target": "backend/main.py", "description": "Fixed incorrect mode routing in get_closed_trades, get_analytics_overview, etc.", "source": "flow-report" }
+  ]
+}
