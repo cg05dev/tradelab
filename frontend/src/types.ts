@@ -16,6 +16,7 @@ export type TradeDetails = {
   tpProfits: Array<{ index: number; price: number; allocation: number; profit: number }>
 }
 export type Trade = {
+  id?: number | string
   index?: number
   _index?: number
   Asset?: string
@@ -35,5 +36,7 @@ export type Trade = {
   Hold_Time?: string
   Confirmations?: string
   Thesis?: string
+  Date?: string
+  'P&L'?: number
 }
 export type HyperliquidOrderRequest = { coin: string; is_buy: boolean; margin_amount: number; leverage: number; entry_price: number; take_profits: TakeProfit[]; stop_losses: TakeProfit[]; is_isolated: boolean }
