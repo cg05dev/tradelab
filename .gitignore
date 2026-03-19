@@ -45,3 +45,13 @@ Thumbs.db
 nul
 backend/nul
 backend_output.log
+
+# TradeLab specific
+tradelab-notes/
+.factory/
+.mcp.json
+
+# Backend data files
+backend/*.csv
+backend/*.json
+backend/**/*.json

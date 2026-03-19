@@ -3,6 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Layout from './components/Layout'
 import WelcomeScreen from './components/WelcomeScreen'
 import PortfolioHeader from './components/PortfolioHeader'
+import ModeToggle from './components/ModeToggle'
+import { ModeProvider } from './contexts/ModeContext'
 import TradePage from './pages/TradePage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import { getPortfolio } from './api/portfolio'
@@ -32,13 +34,18 @@ function PrimaryNav() {
 function RouterLayout() {
   return (
     <Layout>
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <PortfolioHeader />
-          <PrimaryNav />
+      <ModeProvider>
+        <div className="max-w-7xl mx-auto px-6 py-6 space-y-6 relative">
+          <div className="flex items-start justify-between gap-4 flex-wrap">
+            <PortfolioHeader />
+            <PrimaryNav />
+          </div>
+          <div className="absolute top-6 right-6 z-10">
+            <ModeToggle />
+          </div>
+          <Outlet />
         </div>
-        <Outlet />
-      </div>
+      </ModeProvider>
     </Layout>
   )
 }
