@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { TrendingUp } from 'lucide-react'
 import { updatePortfolio } from '../api/portfolio'
 import { getErrorMessage } from '../api/error'
 
 export default function WelcomeScreen({ onComplete }: { onComplete: () => void }) {
+  const queryClient = useQueryClient()
   const [portfolioSize, setPortfolioSize] = useState('')
   const [error, setError] = useState('')
 
@@ -16,7 +17,10 @@ export default function WelcomeScreen({ onComplete }: { onComplete: () => void }
       }
       return updatePortfolio(size)
     },
-    onSuccess: () => onComplete(),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['portfolio'] })
+      onComplete()
+    },
     onError: (err) => setError(getErrorMessage(err, 'Error setting portfolio size. Please try again.')),
   })
 

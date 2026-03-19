@@ -1,5 +1,5 @@
-import { Outlet, createRootRoute, createRoute, createRouter, Link } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
+import { Outlet, createRootRoute, createRoute, createRouter, Link, useRouter } from '@tanstack/react-router'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Layout from './components/Layout'
 import WelcomeScreen from './components/WelcomeScreen'
 import PortfolioHeader from './components/PortfolioHeader'
@@ -48,6 +48,8 @@ function RouterLayout() {
 }
 
 function RootRoute() {
+  const queryClient = useQueryClient()
+  const router = useRouter()
   const portfolioQuery = useQuery({
     queryKey: ['portfolio'],
     queryFn: async () => (await getPortfolio()).data ?? { portfolio_size: 0 },
@@ -62,7 +64,10 @@ function RootRoute() {
   }
 
   if ((portfolioQuery.data?.portfolio_size ?? 0) <= 0) {
-    return <WelcomeScreen onComplete={() => router.navigate({ to: '/planner' })} />
+    return <WelcomeScreen onComplete={async () => {
+      await queryClient.invalidateQueries({ queryKey: ['portfolio'] })
+      router.navigate({ to: '/planner' })
+    }} />
   }
 
   return <Outlet />
