@@ -15,6 +15,8 @@ A modern, browser-first trading journal application for tracking and analyzing c
 - **Planning/Live Mode**: Switch between planning mode (simulation) and live mode (real execution)
 - **Browser-First**: Modern React application running entirely in the browser
 - **Data Persistence**: All trades automatically saved to CSV
+- **Two-Tab Navigation**: Simplified navigation with Trade and Analytics tabs
+- **Analytics Dashboard**: Performance metrics with timeframe filtering, P&L chart, and trade history with filtering/search/pagination
 
 ## Tech Stack
 
@@ -108,7 +110,8 @@ tradelab/
 - `POST /api/mode` - Update trading mode
 - `GET /api/trades` - Get all trades
 - `GET /api/trades/open` - Get open trades
-- `GET /api/trades/closed` - Get closed trades
+- `GET /api/trades/closed` - Get closed trades with filtering (asset, start, end, sort, page, limit, search)
+- `GET /api/trades/closed/count` - Get total closed trades count
 - `POST /api/trades` - Add new trade
 - `POST /api/trades/close` - Close a trade
 - `POST /api/trades/partial-close` - Record TP hit
@@ -117,6 +120,8 @@ tradelab/
 - `DELETE /api/trades/clear` - Clear all trades
 - `POST /api/trades/import` - Import trades from CSV
 - `GET /api/analytics/overview` - Get analytics overview
+- `GET /api/analytics/metrics?timeframe=` - Get performance metrics (total_pnl, win_rate, avg_win, avg_loss) by timeframe
+- `GET /api/analytics/pnl-series?timeframe=` - Get cumulative P&L series for charting
 - `POST /api/calculate/position-size` - Calculate position size
 - `POST /api/calculate/risk-reward` - Calculate risk/reward ratio
 - `POST /api/calculate/profit-loss` - Calculate profit/loss
