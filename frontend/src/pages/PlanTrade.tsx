@@ -136,7 +136,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
         thesis: thesis || null,
         margin: tradeDetails?.marginRequired ?? (((tradeDetails?.positionSize ?? 0) / leverage) || 0),
         leverage,
-      })
+      }, mode)
       return placeHyperliquidOrder({
         coin: asset.split('-')[0] ?? '',
         is_buy: direction === 'long',

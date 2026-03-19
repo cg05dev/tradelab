@@ -113,6 +113,7 @@ def _normalize_mode(mode: Optional[str] = None):
         return mode
     return load_mode() if mode is None else DEFAULT_MODE
 
+
 def _get_mode_file(mode: Optional[str] = None):
     current_mode = _normalize_mode(mode)
     return DATA_FILES[current_mode]
@@ -323,7 +324,7 @@ def update_mode(request: ModeUpdateRequest):
 def get_trades(mode: Optional[str] = None):
     """Get all trades"""
     try:
-        df = load_trades(mode)
+        df = load_trades(normalized_mode)
         if df.empty:
             return {"trades": []}
         
@@ -338,7 +339,7 @@ def get_trades(mode: Optional[str] = None):
 def get_open_trades(mode: Optional[str] = None):
     """Get open trades only"""
     try:
-        df = load_trades(mode)
+        df = load_trades(normalized_mode)
         if df.empty:
             return {"trades": []}
         if 'Status' not in df.columns:
@@ -363,7 +364,7 @@ def get_open_trades(mode: Optional[str] = None):
 def get_closed_trades(asset=None, start=None, end=None, sort=None, page=None, limit=None, search=None, mode: Optional[str] = None):
     """Get closed trades with optional filtering, sorting, and pagination"""
     try:
-        df = load_trades(mode)
+        df = load_trades(normalized_mode)
         if df.empty or 'Status' not in df.columns:
             return {"trades": []}
 
@@ -428,7 +429,7 @@ def get_closed_trades(asset=None, start=None, end=None, sort=None, page=None, li
 @app.get("/api/trades/closed/count")
 def get_closed_trades_count(mode: Optional[str] = None):
     try:
-        df = load_trades(mode)
+        df = load_trades(normalized_mode)
         if df.empty or 'Status' not in df.columns:
             return {"count": 0}
         return {"count": int((df['Status'] == 'Closed').sum())}
@@ -440,7 +441,7 @@ def get_closed_trades_count(mode: Optional[str] = None):
 @app.get("/api/analytics/metrics")
 def get_analytics_metrics(timeframe: str = 'all', mode: Optional[str] = None):
     try:
-        df = load_trades(mode)
+        df = load_trades(normalized_mode)
         if df.empty or 'Status' not in df.columns:
             return {"total_pnl": 0, "win_rate": 0, "avg_win": 0, "avg_loss": 0}
         closed = df[df['Status'] == 'Closed'].copy()
@@ -464,7 +465,7 @@ def get_analytics_metrics(timeframe: str = 'all', mode: Optional[str] = None):
 @app.get("/api/analytics/pnl-series")
 def get_pnl_series(timeframe: str = 'all', mode: Optional[str] = None):
     try:
-        df = load_trades(mode)
+        df = load_trades(normalized_mode)
         if df.empty or 'Status' not in df.columns:
             return []
         closed = df[df['Status'] == 'Closed'].copy()
@@ -490,6 +491,9 @@ def get_pnl_series(timeframe: str = 'all', mode: Optional[str] = None):
 def add_trade(trade_data: TradeData, mode: Optional[str] = None):
     """Add a new trade"""
     try:
+        normalized_mode = _normalize_mode(mode)
+        if normalized_mode not in DATA_FILES:
+            normalized_mode = load_mode()
         # Validation
         if trade_data.entry_price <= 0:
             raise HTTPException(status_code=400, detail="Entry price must be greater than 0")
@@ -512,7 +516,7 @@ def add_trade(trade_data: TradeData, mode: Optional[str] = None):
                 if trade_data.direction.lower() == 'short' and tp.price >= trade_data.entry_price:
                     raise HTTPException(status_code=400, detail=f"Take profit {tp.price} must be below entry price for short positions")
         
-        df = load_trades(mode)
+        df = load_trades(normalized_mode)
         
         new_trade = {
             'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -538,7 +542,7 @@ def add_trade(trade_data: TradeData, mode: Optional[str] = None):
         }
         
         df = pd.concat([df, pd.DataFrame([new_trade])], ignore_index=True)
-        save_trades(df, mode)
+        save_trades(df, normalized_mode)
         
         return {"message": "Trade added successfully", "trade_index": len(df) - 1}
     except Exception as e:
@@ -826,7 +830,7 @@ async def import_trades(file: UploadFile = File(...), mode: Optional[str] = None
             df = df[JOURNAL_COLUMNS]
             
             # Save the imported trades
-            save_trades(df, mode)
+            save_trades(df, normalized_mode)
             
             # Count trades
             total_trades = len(df)
@@ -1154,7 +1158,7 @@ def calculate_trade_details(request: TradeDetailsRequest):
 def get_analytics_overview(mode: Optional[str] = None):
     """Get trading analytics overview"""
     try:
-        df = load_trades(mode)
+        df = load_trades(normalized_mode)
         if df.empty:
             return {
                 "total_trades": 0,
