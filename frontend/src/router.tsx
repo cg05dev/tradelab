@@ -1,11 +1,9 @@
-import { Outlet, createRootRoute, createRoute, createRouter, Link, redirect, useRouter } from '@tanstack/react-router'
+import { Outlet, createRootRoute, createRoute, createRouter, Link, Navigate, useRouter } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Layout from './components/Layout'
 import WelcomeScreen from './components/WelcomeScreen'
 import PortfolioHeader from './components/PortfolioHeader'
-import PlanTrade from './pages/PlanTrade'
-import OpenTrades from './pages/OpenTrades'
-import TradeHistory from './pages/TradeHistory'
+import TradePage from './pages/TradePage'
 import { getPortfolio } from './api/portfolio'
 
 function PrimaryNav() {
@@ -71,22 +69,7 @@ function RootRoute() {
 }
 
 function TradeRoute() {
-  return (
-    <div className="space-y-6">
-      <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
-        <h2 className="text-sm font-medium text-neutral-400 mb-4">Trade</h2>
-        <PlanTrade />
-      </div>
-      <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
-        <h2 className="text-sm font-medium text-neutral-400 mb-4">Open Trades</h2>
-        <OpenTrades />
-      </div>
-      <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
-        <h2 className="text-sm font-medium text-neutral-400 mb-4">Trade History</h2>
-        <TradeHistory />
-      </div>
-    </div>
-  )
+  return <TradePage />
 }
 
 function AnalyticsRoute() {
@@ -97,8 +80,8 @@ function AnalyticsRoute() {
   )
 }
 
-function RedirectToTrade() {
-  return redirect({ to: '/trade' })
+function RedirectLegacyRoute() {
+  return <Navigate to="/trade" />
 }
 
 function NotFoundRoute() {
@@ -128,7 +111,7 @@ const layoutRoute = createRoute({
 const indexRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/',
-  beforeLoad: RedirectToTrade,
+  component: RedirectLegacyRoute,
 })
 
 const tradeRoute = createRoute({
@@ -140,19 +123,19 @@ const tradeRoute = createRoute({
 const plannerRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/planner',
-  beforeLoad: RedirectToTrade,
+  component: RedirectLegacyRoute,
 })
 
 const openTradesRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/open-trades',
-  beforeLoad: RedirectToTrade,
+  component: RedirectLegacyRoute,
 })
 
 const historyRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/history',
-  beforeLoad: RedirectToTrade,
+  component: RedirectLegacyRoute,
 })
 
 const analyticsRoute = createRoute({
