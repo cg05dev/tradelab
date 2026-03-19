@@ -1,0 +1,21 @@
+{
+  "milestone": "cross-validation",
+  "round": 1,
+  "status": "pass",
+  "validatorsRun": {
+    "test": { "passed": true, "command": "cd backend && ./venv/bin/python -m pytest test_api_mode.py test_corrupt_mode.py test_mode_persistence.py", "exitCode": 0 },
+    "typecheck": { "passed": true, "command": "cd frontend && npx tsc --noEmit", "exitCode": 0 },
+    "lint": { "passed": true, "command": "cd frontend && npx eslint src --ext .ts,.tsx", "exitCode": 0 }
+  },
+  "reviewsSummary": {
+    "total": 4,
+    "passed": 4,
+    "failed": 0,
+    "failedFeatures": []
+  },
+  "blockingIssues": [],
+  "appliedUpdates": [],
+  "suggestedGuidanceUpdates": [],
+  "rejectedObservations": [],
+  "previousRound": null
+}
