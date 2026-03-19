@@ -1,6 +1,6 @@
 # TradeLab
 
-A modern, clean trading journal application for tracking and analyzing cryptocurrency trades with comprehensive risk management and performance analytics.
+A modern, browser-first trading journal application for tracking and analyzing cryptocurrency trades with comprehensive risk management, performance analytics, and Hyperliquid integration.
 
 ## Features
 
@@ -11,12 +11,16 @@ A modern, clean trading journal application for tracking and analyzing cryptocur
 - **Live Analysis**: Real-time trade analysis as you input parameters
 - **Performance Tracking**: Comprehensive analytics with win rate, P&L, and profit factor
 - **Trade Management**: Track open and closed trades with detailed history
+- **Hyperliquid Integration**: Execute trades directly on Hyperliquid DEX
+- **Planning/Live Mode**: Switch between planning mode (simulation) and live mode (real execution)
+- **Browser-First**: Modern React application running entirely in the browser
 - **Data Persistence**: All trades automatically saved to CSV
-- **Modern UI**: Clean, minimal interface with smooth animations
 
 ## Tech Stack
 
-- **Frontend**: React + Vite + Tailwind CSS
+- **Frontend**: React + TypeScript + Vite + Tailwind CSS
+- **Routing**: TanStack Router
+- **Data Fetching**: TanStack Query
 - **Backend**: FastAPI + Python
 - **Data**: CSV-based storage (easy to backup and share)
 
@@ -100,6 +104,8 @@ tradelab/
 
 - `GET /api/portfolio` - Get portfolio size
 - `PUT /api/portfolio` - Update portfolio size
+- `GET /api/mode` - Get current trading mode (planning/live)
+- `POST /api/mode` - Update trading mode
 - `GET /api/trades` - Get all trades
 - `GET /api/trades/open` - Get open trades
 - `GET /api/trades/closed` - Get closed trades
@@ -114,6 +120,8 @@ tradelab/
 - `POST /api/calculate/position-size` - Calculate position size
 - `POST /api/calculate/risk-reward` - Calculate risk/reward ratio
 - `POST /api/calculate/profit-loss` - Calculate profit/loss
+- `POST /api/hyperliquid/order` - Execute order on Hyperliquid (blocked in planning mode)
+- `POST /api/hyperliquid/close/{coin}` - Close position on Hyperliquid (blocked in planning mode)
 
 ## Building for Production
 
