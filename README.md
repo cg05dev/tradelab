@@ -12,9 +12,9 @@ A modern, browser-first trading journal application for tracking and analyzing c
 - **Performance Tracking**: Comprehensive analytics with win rate, P&L, and profit factor
 - **Trade Management**: Track open and closed trades with detailed history
 - **Hyperliquid Integration**: Execute trades directly on Hyperliquid DEX
-- **Planning/Live Mode**: Switch between planning mode (simulation) and live mode (real execution)
+- **Paper/Live Mode**: Toggle between paper trading (simulation with separate data) and live trading (real execution)
 - **Browser-First**: Modern React application running entirely in the browser
-- **Data Persistence**: All trades automatically saved to CSV
+- **Data Persistence**: All trades automatically saved to CSV (separate files for Paper and Live modes)
 - **Two-Tab Navigation**: Simplified navigation with Trade and Analytics tabs
 - **Analytics Dashboard**: Performance metrics with timeframe filtering, P&L chart, and trade history with filtering/search/pagination
 
@@ -89,8 +89,11 @@ tradelab/
 ├── backend/
 │   ├── main.py              # FastAPI backend server
 │   ├── requirements.txt     # Python dependencies
-│   ├── trades.csv          # Trade data storage
-│   └── portfolio_config.json # Portfolio configuration
+│   ├── trades.csv          # Trade data storage (Live mode)
+│   ├── trades_paper.csv    # Trade data storage (Paper mode)
+│   ├── portfolio_config.json # Portfolio configuration (Live mode)
+│   ├── portfolio_paper.json # Portfolio configuration (Paper mode)
+│   └── mode_config.json    # Current mode persistence
 ├── frontend/
 │   ├── src/
 │   │   ├── components/     # Reusable React components
@@ -106,8 +109,8 @@ tradelab/
 
 - `GET /api/portfolio` - Get portfolio size
 - `PUT /api/portfolio` - Update portfolio size
-- `GET /api/mode` - Get current trading mode (planning/live)
-- `POST /api/mode` - Update trading mode
+- `GET /api/mode` - Get current trading mode (paper/live)
+- `PUT /api/mode` - Update trading mode
 - `GET /api/trades` - Get all trades
 - `GET /api/trades/open` - Get open trades
 - `GET /api/trades/closed` - Get closed trades with filtering (asset, start, end, sort, page, limit, search)
