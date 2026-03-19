@@ -366,7 +366,8 @@ def get_open_trades(mode: Optional[str] = None):
 def get_closed_trades(asset=None, start=None, end=None, sort=None, page=None, limit=None, search=None, mode: Optional[str] = None):
     """Get closed trades with optional filtering, sorting, and pagination"""
     try:
-        df = load_trades(normalized_mode)
+        current_mode = mode or load_mode()
+        df = load_trades(current_mode)
         if df.empty or 'Status' not in df.columns:
             return {"trades": []}
 
@@ -1168,7 +1169,8 @@ def calculate_trade_details(request: TradeDetailsRequest):
 def get_analytics_overview(mode: Optional[str] = None):
     """Get trading analytics overview"""
     try:
-        df = load_trades(normalized_mode)
+        current_mode = mode or load_mode()
+        df = load_trades(current_mode)
         if df.empty:
             return {
                 "total_trades": 0,
