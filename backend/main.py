@@ -1043,6 +1043,22 @@ def get_analytics_overview():
             "total_pnl": 0
         }
 
+# ==================== Mode Execution Blocking ====================
+
+def check_execution_allowed():
+    """Check if execution is allowed based on current mode. Raises 403 if blocked."""
+    mode = load_mode()
+    if mode == "planning":
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "error": "mode_blocked",
+                "mode": "planning",
+                "reason": "Execution endpoints are blocked in planning mode. Switch to live mode to execute trades."
+            }
+        )
+
+
 # ==================== Hyperliquid Exchange Integration ====================
 
 @app.get("/api/hyperliquid/status")
@@ -1117,6 +1133,9 @@ class HyperliquidOrderRequest(BaseModel):
 @app.post("/api/hyperliquid/order")
 def place_hyperliquid_order(request: HyperliquidOrderRequest):
     """Place a market order on Hyperliquid with built-in TP/SL"""
+    # Check if execution is allowed in current mode
+    check_execution_allowed()
+    
     if not hl_client or not hl_client.enabled:
         raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
     
@@ -1309,6 +1328,9 @@ def get_ws_price():
 @app.post("/api/hyperliquid/close/{coin}")
 def close_hyperliquid_position(coin: str):
     """Close all positions for a given coin via market order and return fill price"""
+    # Check if execution is allowed in current mode
+    check_execution_allowed()
+    
     if not hl_client:
         raise HTTPException(status_code=503, detail="Hyperliquid client not initialized")
     
