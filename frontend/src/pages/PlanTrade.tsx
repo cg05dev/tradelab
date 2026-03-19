@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { addTrade } from '../api/trades'
 import { getPortfolio } from '../api/portfolio'
-import { getHyperliquidPrice, placeHyperliquidOrder, getHyperliquidAssets, getMode } from '../api/hyperliquid'
+import { getHyperliquidPrice, placeHyperliquidOrder, getHyperliquidAssets, getMode, setMode } from '../api/hyperliquid'
 import { getErrorMessage } from '../api/error'
 import type { HyperliquidAsset, TakeProfit, TradeDetails } from '../types'
 
 const MAINTENANCE_MARGIN = 0.0125
+const MODE_STORAGE_KEY = 'tradelab-mode'
+type UITradingMode = 'paper' | 'live'
+const normalizeMode = (value?: string | null): UITradingMode => value === 'paper' ? 'paper' : 'live'
 
 export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void }) {
   const queryClient = useQueryClient()
@@ -20,6 +23,10 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
   const [thesis, setThesis] = useState('')
   const [currentPrice, setCurrentPrice] = useState<number | null>(null)
   const [tradeDetails, setTradeDetails] = useState<TradeDetails | null>(null)
+  const [mode, setModeState] = useState<UITradingMode>(() => {
+    if (typeof window === 'undefined') return 'live'
+    return normalizeMode(window.localStorage.getItem(MODE_STORAGE_KEY))
+  })
   const portfolioQuery = useQuery({ queryKey: ['portfolio'], queryFn: async () => (await getPortfolio()).data })
   const assetsQuery = useQuery<HyperliquidAsset[]>({ queryKey: ['hyperliquid-assets'], queryFn: async () => (await getHyperliquidAssets()).data?.assets || [] })
 
@@ -32,11 +39,28 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     retry: 1,
   })
 
-  const modeQuery = useQuery({ queryKey: ['mode'], queryFn: async () => (await getMode()).data?.mode ?? 'planning' })
+  const modeQuery = useQuery({
+    queryKey: ['mode'],
+    queryFn: async () => {
+      const remoteMode = (await getMode()).data?.mode ?? 'live'
+      const uiMode = normalizeMode(remoteMode)
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(MODE_STORAGE_KEY, uiMode)
+      }
+      setModeState(uiMode)
+      return uiMode
+    },
+  })
 
   useEffect(() => {
     if (typeof priceQuery.data === 'number') setCurrentPrice(priceQuery.data)
   }, [priceQuery.data])
+
+  useEffect(() => {
+    if (modeQuery.data) {
+      setModeState(modeQuery.data === 'paper' ? 'paper' : 'live')
+    }
+  }, [modeQuery.data])
 
   useEffect(() => {
     if (!asset || !assetsQuery.data?.length) return
@@ -96,8 +120,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
 
   const executeMutation = useMutation({
     mutationFn: async () => {
-      const mode = modeQuery.data
-      if (mode === 'planning') {
+      if (normalizeMode(mode) !== 'live') {
         throw { error: 'mode_blocked', mode: 'planning' as const, reason: 'Trading is in planning mode. Switch to live mode to execute real trades.' }
       }
       if (!asset || !currentPrice) throw new Error('Please select an asset first')
@@ -128,6 +151,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['closed-trades'] })
       await queryClient.invalidateQueries({ queryKey: ['portfolio'] })
+      await queryClient.invalidateQueries({ queryKey: ['mode'] })
       onTradeAdded?.()
       alert('Trade saved to journal and order placed on Hyperliquid!')
     },
@@ -141,6 +165,39 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.2em] text-neutral-500 mb-2">Trading Mode</p>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const nextMode: UITradingMode = mode === 'paper' ? 'live' : 'paper'
+                    setModeState(nextMode)
+                    if (typeof window !== 'undefined') {
+                      window.localStorage.setItem(MODE_STORAGE_KEY, nextMode)
+                    }
+                    try {
+                      await setMode(nextMode === 'paper' ? 'planning' : 'live')
+                      await queryClient.invalidateQueries({ queryKey: ['mode'] })
+                    } catch (error) {
+                      setModeState(mode)
+                      if (typeof window !== 'undefined') {
+                        window.localStorage.setItem(MODE_STORAGE_KEY, mode)
+                      }
+                      throw error
+                    }
+                  }}
+                  className="inline-flex items-center rounded-full border border-neutral-700 bg-neutral-900/70 p-1 shadow-inner shadow-black/30"
+                  aria-label="Toggle trading mode"
+                >
+                  <span className={mode === 'paper' ? 'px-4 py-2 rounded-full text-sm font-semibold bg-indigo-500 text-white shadow-md shadow-indigo-500/30' : 'px-4 py-2 rounded-full text-sm font-semibold text-neutral-400'}>Paper</span>
+                  <span className={mode === 'live' ? 'px-4 py-2 rounded-full text-sm font-semibold bg-emerald-500 text-white shadow-md shadow-emerald-500/30' : 'px-4 py-2 rounded-full text-sm font-semibold text-neutral-400'}>Live</span>
+                </button>
+              </div>
+              <div className={mode === 'paper' ? 'rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-300' : 'rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-300'}>
+                {mode === 'paper' ? 'Paper mode' : 'Live mode'}
+              </div>
+            </div>
             <form onSubmit={(e) => e.preventDefault()} className="space-y-8">
               <div className="flex items-center justify-between">
                 <div><h3 className="text-sm font-medium text-white">BTC-USDC</h3><p className="text-xs text-neutral-400">Perpetual</p></div>
@@ -162,7 +219,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
         <button
           onClick={() => executeMutation.mutate()}
           disabled={executeMutation.isPending}
-          className="px-8 py-3 rounded-lg text-sm font-semibold bg-green-600 hover:bg-green-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-600"
+          className={mode === 'paper' ? 'px-8 py-3 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-indigo-600' : 'px-8 py-3 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-emerald-600'}
         >
           {executeMutation.isPending ? 'Executing...' : 'Execute Trade'}
         </button>
