@@ -21,8 +21,8 @@ function PrimaryNav() {
         <Link
           key={item.to}
           to={item.to}
-          className="rounded-full border border-neutral-700 px-3 py-1 transition-colors hover:border-neutral-500 hover:text-white data-[status=active]:border-green-500 data-[status=active]:text-green-400"
-          activeProps={{ className: 'rounded-full border border-green-500 px-3 py-1 text-green-400' }}
+          className="rounded-full border border-neutral-700 px-3 py-1 transition-colors hover:border-neutral-500 hover:text-white data-[status=active]:border-white data-[status=active]:text-white"
+          activeProps={{ className: 'rounded-full border border-white px-3 py-1 text-white' }}
         >
           {item.label}
         </Link>

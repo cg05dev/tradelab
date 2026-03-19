@@ -57,9 +57,6 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
 
   const executeMutation = useMutation({
     mutationFn: async () => {
-      if (normalizeMode(mode) !== 'live') {
-        throw { error: 'mode_blocked', mode: 'planning' as const, reason: 'Trading is in planning mode. Switch to live mode to execute real trades.' }
-      }
       if (!asset || !currentPrice) throw new Error('Please select an asset first')
       const trade = {
         asset,
@@ -72,18 +69,21 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
         stop_losses: stopLoss ? [{ price: stopLoss, allocation: 100 }] : [],
         thesis,
       }
-      await addTrade(trade)
-      const order: HyperliquidOrderRequest = {
-        coin: asset.split('-')[0] ?? asset,
-        is_buy: direction === 'long',
-        margin_amount: ((portfolioQuery.data?.portfolio_size || 2000) * riskPercentage / 100),
-        leverage,
-        entry_price: currentPrice,
-        take_profits: takeProfits,
-        stop_losses: stopLoss ? [{ price: stopLoss, allocation: 100 }] : [],
-        is_isolated: true,
+      const currentMode = normalizeMode(mode)
+      await addTrade(trade, currentMode)
+      if (currentMode === 'live') {
+        const order: HyperliquidOrderRequest = {
+          coin: asset.split('-')[0] ?? asset,
+          is_buy: direction === 'long',
+          margin_amount: ((portfolioQuery.data?.portfolio_size || 2000) * riskPercentage / 100),
+          leverage,
+          entry_price: currentPrice,
+          take_profits: takeProfits,
+          stop_losses: stopLoss ? [{ price: stopLoss, allocation: 100 }] : [],
+          is_isolated: true,
+        }
+        await placeHyperliquidOrder(order)
       }
-      await placeHyperliquidOrder(order)
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['closed-trades'] })
@@ -91,7 +91,10 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
       await queryClient.invalidateQueries({ queryKey: ['open-trades'] })
       await queryClient.invalidateQueries({ queryKey: ['mode'] })
       onTradeAdded?.()
-      alert('Trade saved to journal and order placed on Hyperliquid!')
+      const currentMode = normalizeMode(mode)
+      alert(currentMode === 'live'
+        ? 'Trade saved to journal and order placed on Hyperliquid!'
+        : 'Trade saved to paper journal.')
     },
     onError: (error) => {
       alert(getErrorMessage(error, 'Error executing trade'))
@@ -125,9 +128,11 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
             onClick={() => executeMutation.mutate()}
             disabled={executeMutation.isPending}
             className={`px-8 py-3 rounded-xl text-sm font-semibold border border-neutral-700/30 bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow ${
-              mode === 'paper' 
-                ? 'text-indigo-400 hover:text-indigo-300 shadow-indigo-500/10' 
-                : 'text-emerald-400 hover:text-emerald-300 shadow-emerald-500/10'
+              mode === 'paper'
+                ? 'text-indigo-400 hover:text-indigo-300 shadow-indigo-500/10'
+                : direction === 'short'
+                  ? 'text-red-400 hover:text-red-300 shadow-red-500/10'
+                  : 'text-emerald-400 hover:text-emerald-300 shadow-emerald-500/10'
             }`}
           >
             {executeMutation.isPending ? 'Executing...' : 'Execute Trade'}

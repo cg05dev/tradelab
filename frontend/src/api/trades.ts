@@ -3,7 +3,7 @@ import api from './client'
 export const getTrades = () => api.get('/api/trades')
 export const getOpenTrades = () => api.get('/api/trades/open')
 export const getClosedTrades = (params?: Record<string, unknown>) => api.get('/api/trades/closed', { params })
-export const getClosedTradesCount = () => api.get('/api/trades/closed/count')
+export const getClosedTradesCount = (mode?: string) => api.get('/api/trades/closed/count', { params: mode ? { mode } : undefined })
 export const getTradeHistory = () => api.get('/api/trades')
 export const addTrade = (tradeData: unknown, mode?: 'paper' | 'live') => {
   const params = mode ? { mode } : undefined

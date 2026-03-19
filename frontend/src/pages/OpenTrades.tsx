@@ -3,11 +3,13 @@ import { X } from 'lucide-react'
 import { getOpenTrades, closeTrade, partialCloseTrade, stopLossHit } from '../api/trades'
 import { getHyperliquidPrice, closeHyperliquidPosition } from '../api/hyperliquid'
 import { TradeCardSkeleton } from '../components/LoadingSkeleton'
+import { useMode } from '../contexts/ModeContext'
 import type { Trade, ApiError } from '../types'
 
 type TradeWithIndex = Trade & { index: number }
 
 const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
+  const { mode } = useMode()
   const [trades, setTrades] = useState<Trade[]>([])
   const [selectedTrade, setSelectedTrade] = useState<TradeWithIndex | null>(null)
   const [selectedTradeForDetail, setSelectedTradeForDetail] = useState<Trade | null>(null)
@@ -144,9 +146,9 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
     
     setIsClosing(true)
     
-    // Close position on Hyperliquid if requested
+    // Close position on Hyperliquid if requested and in live mode
     let fillPrice
-    if (closeOnHyperliquid) {
+    if (closeOnHyperliquid && mode === 'live') {
       try {
         console.log(`[INFO] Closing position on Hyperliquid for ${coin}...`)
         const response = await closeHyperliquidPosition(coin)
@@ -463,23 +465,25 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
                 <p className="text-xs text-neutral-500 mt-1">Direction: {selectedTrade.Direction?.toUpperCase()}</p>
                 <p className="text-xs text-neutral-500">Position Size: ${selectedTrade.Position_Size?.toFixed(2)}</p>
               </div>
-              <div className="flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  id="closeOnHL"
-                  checked={closeOnHyperliquid}
-                  onChange={(e) => setCloseOnHyperliquid(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-0"
-                />
-                <label htmlFor="closeOnHL" className="text-neutral-400 cursor-pointer select-none">
-                  Close position on Hyperliquid at market price
-                </label>
-              </div>
+              {mode === 'live' && (
+                <div className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    id="closeOnHL"
+                    checked={closeOnHyperliquid}
+                    onChange={(e) => setCloseOnHyperliquid(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-0"
+                  />
+                  <label htmlFor="closeOnHL" className="text-neutral-400 cursor-pointer select-none">
+                    Close position on Hyperliquid at market price
+                  </label>
+                </div>
+              )}
               <div className="bg-neutral-800/30 p-3 rounded border border-neutral-700/50">
                 <p className="text-xs text-neutral-400 mb-1">This will:</p>
                 <ul className="text-xs text-neutral-500 space-y-1 list-disc list-inside">
-                  {closeOnHyperliquid && <li>Close the position on Hyperliquid at current market price</li>}
-                  <li>Record the trade in your journal at {closeOnHyperliquid ? 'the fill price from Hyperliquid' : 'current market price'}</li>
+                  {closeOnHyperliquid && mode === 'live' && <li>Close the position on Hyperliquid at current market price</li>}
+                  <li>Record the trade in your journal at {closeOnHyperliquid && mode === 'live' ? 'the fill price from Hyperliquid' : 'current market price'}</li>
                   <li>Update your portfolio balance</li>
                 </ul>
               </div>

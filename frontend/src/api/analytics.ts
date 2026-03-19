@@ -9,10 +9,10 @@ export type AnalyticsMetrics = {
 
 export type PnlSeriesPoint = { date?: string; cumulative_pnl?: number }
 
-export const getAnalyticsMetrics = (timeframe = 'all') =>
-  api.get<AnalyticsMetrics>('/api/analytics/metrics', { params: { timeframe } })
+export const getAnalyticsMetrics = (timeframe = 'all', mode?: string) =>
+  api.get<AnalyticsMetrics>('/api/analytics/metrics', { params: { timeframe, mode } })
 
-export const getAnalyticsOverview = () => getAnalyticsMetrics('all')
+export const getAnalyticsOverview = (mode?: string) => getAnalyticsMetrics('all', mode)
 
-export const getPnlSeries = (timeframe = 'all') =>
-  api.get<PnlSeriesPoint[]>('/api/analytics/pnl-series', { params: { timeframe } })
+export const getPnlSeries = (timeframe = 'all', mode?: string) =>
+  api.get<PnlSeriesPoint[]>('/api/analytics/pnl-series', { params: { timeframe, mode } })

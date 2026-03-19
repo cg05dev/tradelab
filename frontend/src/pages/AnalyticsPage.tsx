@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { getAnalyticsMetrics, getPnlSeries } from '../api/analytics'
 import { getClosedTrades, getClosedTradesCount } from '../api/trades'
+import { useMode } from '../contexts/ModeContext'
 import type { Trade } from '../types'
 
 const TIMEFRAMES = [
@@ -16,6 +17,7 @@ const TIMEFRAMES = [
 ] as const
 
 export default function AnalyticsPage() {
+  const { mode } = useMode()
   const [timeframe, setTimeframe] = useState<'all' | '7d' | '30d' | '90d' | 'ytd' | '1y'>('all')
   const [asset, setAsset] = useState('')
   const [search, setSearch] = useState('')
@@ -23,12 +25,12 @@ export default function AnalyticsPage() {
   const [page, setPage] = useState(1)
   const limit = 10
 
-  const metricsQuery = useQuery({ queryKey: ['analytics-metrics', timeframe], queryFn: async () => (await getAnalyticsMetrics(timeframe)).data })
-  const seriesQuery = useQuery({ queryKey: ['analytics-pnl-series', timeframe], queryFn: async () => (await getPnlSeries(timeframe)).data ?? [] })
-  const countQuery = useQuery({ queryKey: ['closed-trades-count'], queryFn: async () => (await getClosedTradesCount()).data?.count ?? 0 })
+  const metricsQuery = useQuery({ queryKey: ['analytics-metrics', timeframe, mode], queryFn: async () => (await getAnalyticsMetrics(timeframe, mode)).data })
+  const seriesQuery = useQuery({ queryKey: ['analytics-pnl-series', timeframe, mode], queryFn: async () => (await getPnlSeries(timeframe, mode)).data ?? [] })
+  const countQuery = useQuery({ queryKey: ['closed-trades-count', mode], queryFn: async () => (await getClosedTradesCount(mode)).data?.count ?? 0 })
   const tradesQuery = useQuery({
-    queryKey: ['closed-trades', { timeframe, asset, search, sort, page, limit }],
-    queryFn: async () => (await getClosedTrades({ asset: asset || undefined, search: search || undefined, sort, page, limit })).data ?? { trades: [] },
+    queryKey: ['closed-trades', { timeframe, asset, search, sort, page, limit, mode }],
+    queryFn: async () => (await getClosedTrades({ asset: asset || undefined, search: search || undefined, sort, page, limit, mode })).data ?? { trades: [] },
   })
 
   const trades = (tradesQuery.data?.trades ?? []) as Trade[]
