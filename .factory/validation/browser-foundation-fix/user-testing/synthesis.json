@@ -1,0 +1,26 @@
+{
+  "milestone": "browser-foundation-fix",
+  "round": 1,
+  "status": "fail",
+  "assertionsSummary": {
+    "total": 18,
+    "passed": 1,
+    "failed": 9,
+    "blocked": 8
+  },
+  "passedAssertions": ["VAL-UI-003"],
+  "failedAssertions": [
+    { "id": "VAL-MODE-001", "reason": "Backend does not implement /api/mode endpoint" },
+    { "id": "VAL-MODE-007", "reason": "Cannot verify mode-specific behavior without /api/mode" },
+    { "id": "VAL-UI-001", "reason": "Environment already has portfolio configured" },
+    { "id": "VAL-UI-002", "reason": "Unable to reset portfolio state to trigger welcome flow" }
+  ],
+  "blockedAssertions": [
+    { "id": "VAL-MODE-002", "blockedBy": "VAL-MODE-001" },
+    { "id": "VAL-MODE-003", "blockedBy": "VAL-MODE-001" },
+    { "id": "VAL-MODE-005", "blockedBy": "VAL-MODE-001" },
+    { "id": "VAL-MODE-006", "blockedBy": "VAL-MODE-001" },
+    { "id": "VAL-MODE-011", "blockedBy": "VAL-MODE-001" }
+  ],
+  "appliedUpdates": []
+}
