@@ -2,7 +2,7 @@ commands:
   install: cd frontend && npm install
   typecheck: cd frontend && npx tsc --noEmit
   build: cd frontend && npm run build
-  test: echo "No test suite configured"
+  test: cd backend && ./venv/bin/python -m pytest test_api_mode.py test_corrupt_mode.py test_mode_persistence.py
   lint: cd frontend && npx eslint src --ext .ts,.tsx
 
 services:
