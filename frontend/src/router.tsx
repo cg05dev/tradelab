@@ -1,4 +1,4 @@
-import { Outlet, createRootRoute, createRoute, createRouter, Link, useRouter } from '@tanstack/react-router'
+import { Outlet, createRootRoute, createRoute, createRouter, Link, redirect, useRouter } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Layout from './components/Layout'
 import WelcomeScreen from './components/WelcomeScreen'
@@ -10,10 +10,7 @@ import { getPortfolio } from './api/portfolio'
 
 function PrimaryNav() {
   const navItems = [
-    { to: '/', label: 'Welcome' },
-    { to: '/planner', label: 'Planner' },
-    { to: '/open-trades', label: 'Open Trades' },
-    { to: '/history', label: 'History' },
+    { to: '/trade', label: 'Trade' },
     { to: '/analytics', label: 'Analytics' },
   ] as const
 
@@ -66,31 +63,28 @@ function RootRoute() {
   if ((portfolioQuery.data?.portfolio_size ?? 0) <= 0) {
     return <WelcomeScreen onComplete={async () => {
       await queryClient.invalidateQueries({ queryKey: ['portfolio'] })
-      router.navigate({ to: '/planner' })
+      router.navigate({ to: '/trade' })
     }} />
   }
 
   return <Outlet />
 }
 
-function PlannerRoute() {
-  return <PlanTrade />
-}
-
-function OpenTradesRoute() {
+function TradeRoute() {
   return (
-    <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
-      <h2 className="text-sm font-medium text-neutral-400 mb-4">Open Trades</h2>
-      <OpenTrades />
-    </div>
-  )
-}
-
-function HistoryRoute() {
-  return (
-    <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
-      <h2 className="text-sm font-medium text-neutral-400 mb-4">Trade History</h2>
-      <TradeHistory />
+    <div className="space-y-6">
+      <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
+        <h2 className="text-sm font-medium text-neutral-400 mb-4">Trade</h2>
+        <PlanTrade />
+      </div>
+      <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
+        <h2 className="text-sm font-medium text-neutral-400 mb-4">Open Trades</h2>
+        <OpenTrades />
+      </div>
+      <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
+        <h2 className="text-sm font-medium text-neutral-400 mb-4">Trade History</h2>
+        <TradeHistory />
+      </div>
     </div>
   )
 }
@@ -101,6 +95,10 @@ function AnalyticsRoute() {
       <p className="text-sm text-neutral-400">Analytics view is available from the portfolio header.</p>
     </div>
   )
+}
+
+function RedirectToTrade() {
+  return redirect({ to: '/trade' })
 }
 
 function NotFoundRoute() {
@@ -130,25 +128,31 @@ const layoutRoute = createRoute({
 const indexRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/',
-  component: PlannerRoute,
+  beforeLoad: RedirectToTrade,
+})
+
+const tradeRoute = createRoute({
+  getParentRoute: () => layoutRoute,
+  path: '/trade',
+  component: TradeRoute,
 })
 
 const plannerRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/planner',
-  component: PlannerRoute,
+  beforeLoad: RedirectToTrade,
 })
 
 const openTradesRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/open-trades',
-  component: OpenTradesRoute,
+  beforeLoad: RedirectToTrade,
 })
 
 const historyRoute = createRoute({
   getParentRoute: () => layoutRoute,
   path: '/history',
-  component: HistoryRoute,
+  beforeLoad: RedirectToTrade,
 })
 
 const analyticsRoute = createRoute({
@@ -164,7 +168,7 @@ const notFoundRoute = createRoute({
 })
 
 const routeTree = rootRoute.addChildren([
-  layoutRoute.addChildren([indexRoute, plannerRoute, openTradesRoute, historyRoute, analyticsRoute]),
+  layoutRoute.addChildren([indexRoute, tradeRoute, plannerRoute, openTradesRoute, historyRoute, analyticsRoute]),
   notFoundRoute,
 ])
 

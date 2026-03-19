@@ -1,0 +1,21 @@
+commands:
+  install: cd frontend && npm install
+  typecheck: cd frontend && npm run typecheck
+  lint: cd frontend && npm run lint
+  build: cd frontend && npm run build
+  test: echo "No frontend tests configured"
+
+services:
+  backend:
+    start: cd backend && source venv/bin/activate && python main.py
+    stop: lsof -ti :8000 | xargs kill 2>/dev/null || true
+    healthcheck: curl -sf http://localhost:8000/api/mode
+    port: 8000
+    depends_on: []
+
+  frontend:
+    start: cd frontend && npm run dev
+    stop: lsof -ti :3001 | xargs kill 2>/dev/null || true
+    healthcheck: curl -sf http://localhost:3001
+    port: 3001
+    depends_on: [backend]
