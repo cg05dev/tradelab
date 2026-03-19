@@ -2,7 +2,8 @@ import api from './client'
 
 export const getTrades = () => api.get('/api/trades')
 export const getOpenTrades = () => api.get('/api/trades/open')
-export const getClosedTrades = () => api.get('/api/trades/closed')
+export const getClosedTrades = (params?: Record<string, unknown>) => api.get('/api/trades/closed', { params })
+export const getClosedTradesCount = () => api.get('/api/trades/closed/count')
 export const getTradeHistory = () => api.get('/api/trades')
 export const addTrade = (tradeData: unknown) => api.post('/api/trades', tradeData)
 export const closeTrade = (tradeIndex: number, exitPrice: number) =>

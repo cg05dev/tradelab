@@ -1,5 +1,5 @@
 export type PortfolioResponse = { portfolio_size?: number }
-export type AnalyticsOverview = { total_pnl?: number; win_rate?: number; profit_factor?: number }
+export type AnalyticsOverview = { total_pnl?: number; win_rate?: number; avg_win?: number; avg_loss?: number; profit_factor?: number }
 export type ApiError = { response?: { data?: { detail?: string } } }
 export type HyperliquidAsset = { symbol: string; max_leverage: number }
 export type TakeProfit = { price: number; allocation: number }
@@ -40,3 +40,5 @@ export type Trade = {
   'P&L'?: number
 }
 export type HyperliquidOrderRequest = { coin: string; is_buy: boolean; margin_amount: number; leverage: number; entry_price: number; take_profits: TakeProfit[]; stop_losses: TakeProfit[]; is_isolated: boolean }
+export type AnalyticsMetrics = { total_pnl?: number; win_rate?: number; avg_win?: number; avg_loss?: number }
+export type PnlSeriesPoint = { date?: string; cumulative_pnl?: number }

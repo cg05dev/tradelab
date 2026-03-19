@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import WelcomeScreen from './components/WelcomeScreen'
 import PortfolioHeader from './components/PortfolioHeader'
 import TradePage from './pages/TradePage'
+import AnalyticsPage from './pages/AnalyticsPage'
 import { getPortfolio } from './api/portfolio'
 
 function PrimaryNav() {
@@ -68,18 +69,6 @@ function RootRoute() {
   return <Outlet />
 }
 
-function TradeRoute() {
-  return <TradePage />
-}
-
-function AnalyticsRoute() {
-  return (
-    <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
-      <p className="text-sm text-neutral-400">Analytics view is available from the portfolio header.</p>
-    </div>
-  )
-}
-
 function RedirectLegacyRoute() {
   return <Navigate to="/trade" />
 }
@@ -90,7 +79,7 @@ function NotFoundRoute() {
       <div className="text-center space-y-4">
         <h1 className="text-2xl font-semibold text-white">NotFound</h1>
         <p className="text-sm text-neutral-400">The page you requested does not exist.</p>
-        <Link to="/" className="inline-flex rounded border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:border-neutral-500 hover:text-white">
+        <Link to="/trade" className="inline-flex rounded border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:border-neutral-500 hover:text-white">
           Go home
         </Link>
       </div>
@@ -98,70 +87,21 @@ function NotFoundRoute() {
   )
 }
 
-const rootRoute = createRootRoute({
-  component: RootRoute,
-})
-
-const layoutRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  id: 'layout',
-  component: RouterLayout,
-})
-
-const indexRoute = createRoute({
-  getParentRoute: () => layoutRoute,
-  path: '/',
-  component: RedirectLegacyRoute,
-})
-
-const tradeRoute = createRoute({
-  getParentRoute: () => layoutRoute,
-  path: '/trade',
-  component: TradeRoute,
-})
-
-const plannerRoute = createRoute({
-  getParentRoute: () => layoutRoute,
-  path: '/planner',
-  component: RedirectLegacyRoute,
-})
-
-const openTradesRoute = createRoute({
-  getParentRoute: () => layoutRoute,
-  path: '/open-trades',
-  component: RedirectLegacyRoute,
-})
-
-const historyRoute = createRoute({
-  getParentRoute: () => layoutRoute,
-  path: '/history',
-  component: RedirectLegacyRoute,
-})
-
-const analyticsRoute = createRoute({
-  getParentRoute: () => layoutRoute,
-  path: '/analytics',
-  component: AnalyticsRoute,
-})
-
-const notFoundRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '*',
-  component: NotFoundRoute,
-})
+const rootRoute = createRootRoute({ component: RootRoute })
+const layoutRoute = createRoute({ getParentRoute: () => rootRoute, id: 'layout', component: RouterLayout })
+const indexRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/', component: RedirectLegacyRoute })
+const tradeRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/trade', component: TradePage })
+const analyticsRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/analytics', component: AnalyticsPage })
+const plannerRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/planner', component: RedirectLegacyRoute })
+const openTradesRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/open-trades', component: RedirectLegacyRoute })
+const historyRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/history', component: RedirectLegacyRoute })
+const notFoundRoute = createRoute({ getParentRoute: () => rootRoute, path: '*', component: NotFoundRoute })
 
 const routeTree = rootRoute.addChildren([
-  layoutRoute.addChildren([indexRoute, tradeRoute, plannerRoute, openTradesRoute, historyRoute, analyticsRoute]),
+  layoutRoute.addChildren([indexRoute, tradeRoute, analyticsRoute, plannerRoute, openTradesRoute, historyRoute]),
   notFoundRoute,
 ])
 
-export const router = createRouter({
-  routeTree,
-  defaultPreload: 'intent',
-})
+export const router = createRouter({ routeTree, defaultPreload: 'intent' })
 
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router
-  }
-}
+declare module '@tanstack/react-router' { interface Register { router: typeof router } }

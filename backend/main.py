@@ -177,6 +177,26 @@ def save_mode(mode):
     except Exception as e:
         print(f"[ERROR] Error saving mode: {e}")
 
+def apply_timeframe_filter(df, timeframe):
+    timeframe = (timeframe or 'all').lower()
+    if df.empty or 'Date' not in df.columns:
+        return df
+    now = pd.Timestamp.now(tz=None)
+    if timeframe == 'all':
+        return df
+    if timeframe == '7d':
+        return df[df['Date'] >= now - pd.Timedelta(days=7)]
+    if timeframe == '30d':
+        return df[df['Date'] >= now - pd.Timedelta(days=30)]
+    if timeframe == '90d':
+        return df[df['Date'] >= now - pd.Timedelta(days=90)]
+    if timeframe == 'ytd':
+        start = pd.Timestamp(year=now.year, month=1, day=1)
+        return df[df['Date'] >= start]
+    if timeframe == '1y':
+        return df[df['Date'] >= now - pd.Timedelta(days=365)]
+    return df
+
 def clean_trade_data(df):
     """Clean DataFrame by replacing NaN, inf, -inf with None and converting to dict"""
     # Replace NaN, inf, -inf with None for JSON serialization
@@ -304,22 +324,131 @@ def get_open_trades():
         return {"trades": []}
 
 @app.get("/api/trades/closed")
-def get_closed_trades():
-    """Get closed trades only"""
+def get_closed_trades(asset=None, start=None, end=None, sort=None, page=None, limit=None, search=None):
+    """Get closed trades with optional filtering, sorting, and pagination"""
     try:
         df = load_trades()
-        if df.empty:
+        if df.empty or 'Status' not in df.columns:
             return {"trades": []}
-        if 'Status' not in df.columns:
-            return {"trades": []}
-        closed_trades = df[df['Status'] == 'Closed']
+
+        closed_trades = df[df['Status'] == 'Closed'].copy()
+
         
+        if asset:
+            closed_trades = closed_trades[closed_trades['Asset'].astype(str).str.contains(asset, case=False, na=False)]
+
+        if start:
+            start_dt = pd.to_datetime(start, errors='coerce')
+            if pd.notna(start_dt):
+                closed_trades = closed_trades[pd.to_datetime(closed_trades['Date'], errors='coerce') >= start_dt]
+
+        if end:
+            end_dt = pd.to_datetime(end, errors='coerce')
+            if pd.notna(end_dt):
+                closed_trades = closed_trades[pd.to_datetime(closed_trades['Date'], errors='coerce') <= end_dt]
+
+        if search:
+            search_lower = search.lower()
+            mask = closed_trades['Asset'].astype(str).str.lower().str.contains(search_lower, na=False)
+            if 'Thesis' in closed_trades.columns:
+                mask = mask | closed_trades['Thesis'].astype(str).str.lower().str.contains(search_lower, na=False)
+            closed_trades = closed_trades[mask]
+
+        if sort == 'pnl_desc':
+            closed_trades = closed_trades.sort_values(by='P&L', ascending=False)
+        elif sort == 'pnl_asc':
+            closed_trades = closed_trades.sort_values(by='P&L', ascending=True)
+        elif sort == 'date_desc':
+            closed_trades = closed_trades.sort_values(by='Date', ascending=False)
+        elif sort == 'date_asc':
+            closed_trades = closed_trades.sort_values(by='Date', ascending=True)
+        else:
+            closed_trades = closed_trades.sort_values(by='Date', ascending=False)
+
+        total_count = len(closed_trades)
+        if page is not None or limit is not None:
+            try:
+                page_num = max(int(page or 1), 1)
+            except Exception:
+                page_num = 1
+            try:
+                limit_num = max(int(limit or 25), 1)
+            except Exception:
+                limit_num = 25
+            start_idx = (page_num - 1) * limit_num
+            end_idx = start_idx + limit_num
+            closed_trades = closed_trades.iloc[start_idx:end_idx]
+
         trades_list = clean_trade_data(closed_trades)
-        return {"trades": trades_list}
+        for idx, trade in enumerate(trades_list):
+            trade['_index'] = int(closed_trades.index[idx])
+
+        return {"trades": trades_list, "count": total_count}
     except Exception as e:
         print(f"Error in get_closed_trades: {e}")
         traceback.print_exc()
-        return {"trades": []}
+        return {"trades": [], "count": 0}
+
+@app.get("/api/trades/closed/count")
+def get_closed_trades_count():
+    try:
+        df = load_trades()
+        if df.empty or 'Status' not in df.columns:
+            return {"count": 0}
+        return {"count": int((df['Status'] == 'Closed').sum())}
+    except Exception as e:
+        print(f"Error in get_closed_trades_count: {e}")
+        traceback.print_exc()
+        return {"count": 0}
+
+@app.get("/api/analytics/metrics")
+def get_analytics_metrics(timeframe: str = 'all'):
+    try:
+        df = load_trades()
+        if df.empty or 'Status' not in df.columns:
+            return {"total_pnl": 0, "win_rate": 0, "avg_win": 0, "avg_loss": 0}
+        closed = df[df['Status'] == 'Closed'].copy()
+        if closed.empty:
+            return {"total_pnl": 0, "win_rate": 0, "avg_win": 0, "avg_loss": 0}
+        closed['Date'] = pd.to_datetime(closed['Date'], errors='coerce')
+        closed = apply_timeframe_filter(closed, timeframe)
+        pnl_series = pd.to_numeric(closed['P&L'], errors='coerce').fillna(0)
+        total_pnl = float(pnl_series.sum())
+        wins = pnl_series[pnl_series > 0]
+        losses = pnl_series[pnl_series < 0]
+        win_rate = float(len(wins) / len(pnl_series) * 100) if len(pnl_series) else 0
+        avg_win = float(wins.mean()) if len(wins) else 0
+        avg_loss = float(losses.mean()) if len(losses) else 0
+        return {"total_pnl": total_pnl, "win_rate": win_rate, "avg_win": avg_win, "avg_loss": avg_loss}
+    except Exception as e:
+        print(f"Error in get_analytics_metrics: {e}")
+        traceback.print_exc()
+        return {"total_pnl": 0, "win_rate": 0, "avg_win": 0, "avg_loss": 0}
+
+@app.get("/api/analytics/pnl-series")
+def get_pnl_series(timeframe: str = 'all'):
+    try:
+        df = load_trades()
+        if df.empty or 'Status' not in df.columns:
+            return []
+        closed = df[df['Status'] == 'Closed'].copy()
+        if closed.empty:
+            return []
+        closed['Date'] = pd.to_datetime(closed['Date'], errors='coerce')
+        closed = apply_timeframe_filter(closed, timeframe)
+        if closed.empty:
+            return []
+        closed = closed.sort_values('Date')
+        closed['P&L'] = pd.to_numeric(closed['P&L'], errors='coerce').fillna(0)
+        closed['cumulative_pnl'] = closed['P&L'].cumsum()
+        return [
+            {'date': row['Date'].strftime('%Y-%m-%d') if pd.notna(row['Date']) else None, 'cumulative_pnl': float(row['cumulative_pnl'])}
+            for _, row in closed.iterrows()
+        ]
+    except Exception as e:
+        print(f"Error in get_pnl_series: {e}")
+        traceback.print_exc()
+        return []
 
 @app.post("/api/trades")
 def add_trade(trade_data: TradeData):
