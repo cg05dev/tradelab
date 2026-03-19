@@ -87,8 +87,19 @@ class UpdatePortfolioRequest(BaseModel):
     portfolio_size: float
 
 # Configuration
-CSV_FILE = os.path.join(os.path.dirname(__file__), 'trades.csv')
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'portfolio_config.json')
+BASE_DIR = os.path.dirname(__file__)
+MODE_FILE = os.path.join(BASE_DIR, 'mode_config.json')
+DATA_FILES = {
+    'live': {
+        'trades': os.path.join(BASE_DIR, 'trades.csv'),
+        'portfolio': os.path.join(BASE_DIR, 'portfolio_config.json'),
+    },
+    'paper': {
+        'trades': os.path.join(BASE_DIR, 'trades_paper.csv'),
+        'portfolio': os.path.join(BASE_DIR, 'portfolio_paper.json'),
+    },
+}
+DEFAULT_MODE = 'live'
 RISK_PCT = 0.02
 
 JOURNAL_COLUMNS = [
@@ -97,83 +108,99 @@ JOURNAL_COLUMNS = [
     'TP_Hit', 'TP_Price', 'SL_Hit', 'SL_Price', 'Hit_TPs', 'Margin', 'Leverage'
 ]
 
-def load_trades():
-    """Load trades from CSV"""
+def _normalize_mode(mode: Optional[str] = None):
+    if mode in DATA_FILES:
+        return mode
+    return load_mode() if mode is None else DEFAULT_MODE
+
+def _get_mode_file(mode: Optional[str] = None):
+    current_mode = _normalize_mode(mode)
+    return DATA_FILES[current_mode]
+
+def _ensure_paper_files_exist():
+    paper_files = DATA_FILES['paper']
+    if not os.path.exists(paper_files['trades']):
+        pd.DataFrame(columns=JOURNAL_COLUMNS).to_csv(paper_files['trades'], index=False)
+    if not os.path.exists(paper_files['portfolio']):
+        with open(paper_files['portfolio'], 'w') as f:
+            json.dump({'portfolio_size': 0}, f)
+
+def load_trades(mode: Optional[str] = None):
+    """Load trades from CSV for the selected mode"""
     try:
-        if os.path.exists(CSV_FILE):
-            df = pd.read_csv(CSV_FILE)
-            # Handle migration
+        files = _get_mode_file(mode)
+        if mode == 'paper':
+            _ensure_paper_files_exist()
+        if os.path.exists(files['trades']):
+            df = pd.read_csv(files['trades'])
             if 'Hit_TPs' not in df.columns:
                 df['Hit_TPs'] = [json.dumps([]) for _ in range(len(df))]
             if 'SLs' not in df.columns:
                 df['SLs'] = [json.dumps([]) for _ in range(len(df))]
             return df
         return pd.DataFrame(columns=JOURNAL_COLUMNS)
-    except Exception as e:
+    except Exception:
         return pd.DataFrame(columns=JOURNAL_COLUMNS)
 
-def save_trades(df):
-    """Save trades to CSV"""
-    df.to_csv(CSV_FILE, index=False)
+def save_trades(df, mode: Optional[str] = None):
+    """Save trades to CSV for the selected mode"""
+    files = _get_mode_file(mode)
+    if mode == 'paper':
+        _ensure_paper_files_exist()
+    df.to_csv(files['trades'], index=False)
 
-def load_portfolio_size():
-    """Load portfolio size from config"""
+def load_portfolio_size(mode: Optional[str] = None):
+    """Load portfolio size from config for the selected mode"""
     try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r') as f:
+        files = _get_mode_file(mode)
+        if mode == 'paper':
+            _ensure_paper_files_exist()
+        if os.path.exists(files['portfolio']):
+            with open(files['portfolio'], 'r') as f:
                 config = json.load(f)
                 return config.get('portfolio_size', 0)
         return 0
     except Exception:
         return 0
 
-def save_portfolio_size(size):
-    """Save portfolio size to config"""
-    with open(CONFIG_FILE, 'w') as f:
+def save_portfolio_size(size, mode: Optional[str] = None):
+    """Save portfolio size to config for the selected mode"""
+    files = _get_mode_file(mode)
+    if mode == 'paper':
+        _ensure_paper_files_exist()
+    with open(files['portfolio'], 'w') as f:
         json.dump({'portfolio_size': size}, f)
 
 def load_mode():
-    """Load trading mode from config, defaults to 'planning' if not set or invalid"""
+    """Load trading mode from dedicated mode config, defaults to live."""
     try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r') as f:
+        if os.path.exists(MODE_FILE):
+            with open(MODE_FILE, 'r') as f:
                 config = json.load(f)
-                # Check if mode key exists
-                has_mode = 'mode' in config
-                mode = config.get('mode', 'planning')
-                # If mode key is missing or invalid, fix it
-                if not has_mode or mode not in ('planning', 'live'):
-                    if not has_mode:
-                        print(f"[WARNING] Missing mode key in config, defaulting to 'planning'")
-                    else:
-                        print(f"[WARNING] Invalid mode '{mode}' in config, defaulting to 'planning'")
-                    config['mode'] = 'planning'
-                    with open(CONFIG_FILE, 'w') as f:
-                        json.dump(config, f)
-                    return 'planning'
+                mode = _normalize_mode_value(config.get('mode', DEFAULT_MODE)) or DEFAULT_MODE
+                if mode not in DATA_FILES:
+                    mode = DEFAULT_MODE
+                if config.get('mode') != mode:
+                    with open(MODE_FILE, 'w') as wf:
+                        json.dump({'mode': mode}, wf)
                 return mode
-        return 'planning'
+        with open(MODE_FILE, 'w') as f:
+            json.dump({'mode': DEFAULT_MODE}, f)
+        return DEFAULT_MODE
     except Exception as e:
-        print(f"[WARNING] Error loading mode: {e}, defaulting to 'planning'")
-        # Config file is corrupt, reset it with default mode
+        print(f"[WARNING] Error loading mode: {e}, defaulting to live")
         try:
-            with open(CONFIG_FILE, 'w') as f:
-                json.dump({'portfolio_size': load_portfolio_size(), 'mode': 'planning'}, f)
+            with open(MODE_FILE, 'w') as f:
+                json.dump({'mode': DEFAULT_MODE}, f)
         except Exception:
-            pass  # If we can't write, just return planning
-        return 'planning'
+            pass
+        return DEFAULT_MODE
 
 def save_mode(mode):
-    """Save trading mode to config"""
+    """Save trading mode to dedicated config"""
     try:
-        if os.path.exists(CONFIG_FILE):
-            with open(CONFIG_FILE, 'r') as f:
-                config = json.load(f)
-        else:
-            config = {}
-        config['mode'] = mode
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(config, f)
+        with open(MODE_FILE, 'w') as f:
+            json.dump({'mode': mode}, f)
     except Exception as e:
         print(f"[ERROR] Error saving mode: {e}")
 
@@ -251,20 +278,29 @@ def reset_portfolio():
         raise HTTPException(status_code=500, detail=f"Error resetting portfolio: {str(e)}")
 
 @app.get("/api/portfolio")
-def get_portfolio():
+def get_portfolio(mode: Optional[str] = None):
     """Get current portfolio size"""
-    return {"portfolio_size": load_portfolio_size()}
+    return {"portfolio_size": load_portfolio_size(mode)}
 
 @app.put("/api/portfolio")
-def update_portfolio(request: UpdatePortfolioRequest):
+def update_portfolio(request: UpdatePortfolioRequest, mode: Optional[str] = None):
     """Update portfolio size"""
     if request.portfolio_size < 0:
         raise HTTPException(status_code=400, detail="Portfolio size cannot be negative")
-    save_portfolio_size(request.portfolio_size)
+    save_portfolio_size(request.portfolio_size, mode)
     return {"portfolio_size": request.portfolio_size, "message": "Portfolio size updated"}
 
 class ModeUpdateRequest(BaseModel):
     mode: str
+
+
+def _normalize_mode_value(mode: str) -> str:
+    aliases = {
+        'planning': 'paper',
+        'paper': 'paper',
+        'live': 'live',
+    }
+    return aliases.get((mode or '').lower(), '')
 
 @app.get("/api/mode")
 def get_mode():
@@ -274,20 +310,20 @@ def get_mode():
 @app.post("/api/mode")
 def update_mode(request: ModeUpdateRequest):
     """Update trading mode"""
-    valid_modes = ['planning', 'live']
-    if request.mode not in valid_modes:
+    normalized_mode = _normalize_mode_value(request.mode)
+    if not normalized_mode:
         raise HTTPException(
             status_code=400, 
-            detail=f"Invalid mode '{request.mode}'. Valid modes are: {', '.join(valid_modes)}"
+            detail="Invalid mode '%s'. Valid modes are: paper, live" % request.mode
         )
-    save_mode(request.mode)
-    return {"mode": request.mode, "message": f"Mode updated to '{request.mode}'"}
+    save_mode(normalized_mode)
+    return {"mode": normalized_mode, "message": f"Mode updated to '{normalized_mode}'"}
 
 @app.get("/api/trades")
-def get_trades():
+def get_trades(mode: Optional[str] = None):
     """Get all trades"""
     try:
-        df = load_trades()
+        df = load_trades(mode)
         if df.empty:
             return {"trades": []}
         
@@ -299,10 +335,10 @@ def get_trades():
         return {"trades": []}
 
 @app.get("/api/trades/open")
-def get_open_trades():
+def get_open_trades(mode: Optional[str] = None):
     """Get open trades only"""
     try:
-        df = load_trades()
+        df = load_trades(mode)
         if df.empty:
             return {"trades": []}
         if 'Status' not in df.columns:
@@ -324,10 +360,10 @@ def get_open_trades():
         return {"trades": []}
 
 @app.get("/api/trades/closed")
-def get_closed_trades(asset=None, start=None, end=None, sort=None, page=None, limit=None, search=None):
+def get_closed_trades(asset=None, start=None, end=None, sort=None, page=None, limit=None, search=None, mode: Optional[str] = None):
     """Get closed trades with optional filtering, sorting, and pagination"""
     try:
-        df = load_trades()
+        df = load_trades(mode)
         if df.empty or 'Status' not in df.columns:
             return {"trades": []}
 
@@ -390,9 +426,9 @@ def get_closed_trades(asset=None, start=None, end=None, sort=None, page=None, li
         return {"trades": [], "count": 0}
 
 @app.get("/api/trades/closed/count")
-def get_closed_trades_count():
+def get_closed_trades_count(mode: Optional[str] = None):
     try:
-        df = load_trades()
+        df = load_trades(mode)
         if df.empty or 'Status' not in df.columns:
             return {"count": 0}
         return {"count": int((df['Status'] == 'Closed').sum())}
@@ -402,9 +438,9 @@ def get_closed_trades_count():
         return {"count": 0}
 
 @app.get("/api/analytics/metrics")
-def get_analytics_metrics(timeframe: str = 'all'):
+def get_analytics_metrics(timeframe: str = 'all', mode: Optional[str] = None):
     try:
-        df = load_trades()
+        df = load_trades(mode)
         if df.empty or 'Status' not in df.columns:
             return {"total_pnl": 0, "win_rate": 0, "avg_win": 0, "avg_loss": 0}
         closed = df[df['Status'] == 'Closed'].copy()
@@ -426,9 +462,9 @@ def get_analytics_metrics(timeframe: str = 'all'):
         return {"total_pnl": 0, "win_rate": 0, "avg_win": 0, "avg_loss": 0}
 
 @app.get("/api/analytics/pnl-series")
-def get_pnl_series(timeframe: str = 'all'):
+def get_pnl_series(timeframe: str = 'all', mode: Optional[str] = None):
     try:
-        df = load_trades()
+        df = load_trades(mode)
         if df.empty or 'Status' not in df.columns:
             return []
         closed = df[df['Status'] == 'Closed'].copy()
@@ -451,7 +487,7 @@ def get_pnl_series(timeframe: str = 'all'):
         return []
 
 @app.post("/api/trades")
-def add_trade(trade_data: TradeData):
+def add_trade(trade_data: TradeData, mode: Optional[str] = None):
     """Add a new trade"""
     try:
         # Validation
@@ -476,7 +512,7 @@ def add_trade(trade_data: TradeData):
                 if trade_data.direction.lower() == 'short' and tp.price >= trade_data.entry_price:
                     raise HTTPException(status_code=400, detail=f"Take profit {tp.price} must be below entry price for short positions")
         
-        df = load_trades()
+        df = load_trades(mode)
         
         new_trade = {
             'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -502,16 +538,16 @@ def add_trade(trade_data: TradeData):
         }
         
         df = pd.concat([df, pd.DataFrame([new_trade])], ignore_index=True)
-        save_trades(df)
+        save_trades(df, mode)
         
         return {"message": "Trade added successfully", "trade_index": len(df) - 1}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/trades/close")
-def close_trade(request: CloseTradeRequest):
+def close_trade(request: CloseTradeRequest, mode: Optional[str] = None):
     """Close a trade"""
-    df = load_trades()
+    df = load_trades(mode)
     
     # Use loc for actual DataFrame index (not positional)
     if request.trade_index not in df.index:
@@ -543,11 +579,11 @@ def close_trade(request: CloseTradeRequest):
     df.at[request.trade_index, 'Hold_Time'] = f"{hold_time:.1f}h"
     
     # Update portfolio size
-    portfolio_size = load_portfolio_size()
+    portfolio_size = load_portfolio_size(mode)
     new_portfolio_size = portfolio_size + pnl
-    save_portfolio_size(new_portfolio_size)
+    save_portfolio_size(new_portfolio_size, mode)
     
-    save_trades(df)
+    save_trades(df, mode)
     
     return {
         "message": "Trade closed successfully",
@@ -558,7 +594,7 @@ def close_trade(request: CloseTradeRequest):
 @app.post("/api/trades/partial-close")
 def partial_close_trade(request: PartialCloseRequest):
     """Partially close a trade at TP"""
-    df = load_trades()
+    df = load_trades(mode)
     
     # Use loc for actual DataFrame index (not positional)
     if request.trade_index not in df.index:
@@ -581,9 +617,9 @@ def partial_close_trade(request: PartialCloseRequest):
         pnl = (entry_price - request.tp_price) / entry_price * allocated_position_size
     
     # Update portfolio size
-    portfolio_size = load_portfolio_size()
+    portfolio_size = load_portfolio_size(mode)
     new_portfolio_size = portfolio_size + pnl
-    save_portfolio_size(new_portfolio_size)
+    save_portfolio_size(new_portfolio_size, mode)
     
     # Update position size
     remaining_position_size = total_position_size - allocated_position_size
@@ -622,11 +658,11 @@ def partial_close_trade(request: PartialCloseRequest):
         df.at[request.trade_index, 'Hold_Time'] = f"{hold_time:.1f}h"
         
         # Update portfolio with remaining P&L
-        portfolio_size = load_portfolio_size()
+        portfolio_size = load_portfolio_size(mode)
         new_portfolio_size = portfolio_size + remaining_pnl
-        save_portfolio_size(new_portfolio_size)
+        save_portfolio_size(new_portfolio_size, mode)
     
-    save_trades(df)
+    save_trades(df, mode)
     
     return {
         "message": "TP hit - trade partially closed" if remaining_position_size > 0 else "TP hit - trade fully closed",
@@ -638,7 +674,7 @@ def partial_close_trade(request: PartialCloseRequest):
 @app.post("/api/trades/stop-loss-hit")
 def stop_loss_hit(request: StopLossHitRequest):
     """Handle stop loss hit - closes trade (or allocated portion)"""
-    df = load_trades()
+    df = load_trades(mode)
     
     # Use loc for actual DataFrame index (not positional)
     if request.trade_index not in df.index:
@@ -661,9 +697,9 @@ def stop_loss_hit(request: StopLossHitRequest):
         pnl = (entry_price - request.sl_price) / entry_price * allocated_position_size
     
     # Update portfolio size
-    portfolio_size = load_portfolio_size()
+    portfolio_size = load_portfolio_size(mode)
     new_portfolio_size = portfolio_size + pnl
-    save_portfolio_size(new_portfolio_size)
+    save_portfolio_size(new_portfolio_size, mode)
     
     # Update position size
     remaining_position_size = total_position_size - allocated_position_size
@@ -698,11 +734,11 @@ def stop_loss_hit(request: StopLossHitRequest):
         df.at[request.trade_index, 'Hold_Time'] = f"{hold_time:.1f}h"
         
         # Update portfolio with remaining P&L
-        portfolio_size = load_portfolio_size()
+        portfolio_size = load_portfolio_size(mode)
         new_portfolio_size = portfolio_size + remaining_pnl
-        save_portfolio_size(new_portfolio_size)
+        save_portfolio_size(new_portfolio_size, mode)
     
-    save_trades(df)
+    save_trades(df, mode)
     
     return {
         "message": "SL hit - trade partially closed" if remaining_position_size > 0 else "SL hit - trade fully closed",
@@ -712,12 +748,12 @@ def stop_loss_hit(request: StopLossHitRequest):
     }
 
 @app.delete("/api/trades/clear")
-def clear_all_trades():
+def clear_all_trades(mode: Optional[str] = None):
     """Clear all trades from the CSV file"""
     try:
         # Create empty DataFrame with the correct columns
         empty_df = pd.DataFrame(columns=JOURNAL_COLUMNS)
-        save_trades(empty_df)
+        save_trades(empty_df, mode)
         
         # Reset portfolio size to 0 or keep it - user's choice
         # For now, we'll keep the portfolio size
@@ -730,16 +766,16 @@ def clear_all_trades():
         raise HTTPException(status_code=500, detail=f"Error clearing trades: {str(e)}")
 
 @app.delete("/api/trades/{trade_index}")
-def delete_trade(trade_index: int):
+def delete_trade(trade_index: int, mode: Optional[str] = None):
     """Delete a trade by index"""
-    df = load_trades()
+    df = load_trades(mode)
     
     if trade_index >= len(df) or trade_index < 0:
         raise HTTPException(status_code=400, detail="Invalid trade index")
     
     # Delete the trade by dropping the row
     df = df.drop(df.index[trade_index]).reset_index(drop=True)
-    save_trades(df)
+    save_trades(df, mode)
     
     return {
         "message": "Trade deleted successfully",
@@ -747,7 +783,7 @@ def delete_trade(trade_index: int):
     }
 
 @app.post("/api/trades/import")
-async def import_trades(file: UploadFile = File(...)):
+async def import_trades(file: UploadFile = File(...), mode: Optional[str] = None):
     """Import trades from a CSV file"""
     try:
         # Check file extension
@@ -790,7 +826,7 @@ async def import_trades(file: UploadFile = File(...)):
             df = df[JOURNAL_COLUMNS]
             
             # Save the imported trades
-            save_trades(df)
+            save_trades(df, mode)
             
             # Count trades
             total_trades = len(df)
@@ -817,7 +853,7 @@ async def import_trades(file: UploadFile = File(...)):
 @app.post("/api/calculate/position-size")
 def calculate_position_size(request: PositionSizeRequest):
     """Calculate position size based on risk (matching original logic)"""
-    portfolio_size = load_portfolio_size()
+    portfolio_size = load_portfolio_size(mode)
     risk_pct = request.risk_percentage / 100 if request.risk_percentage else RISK_PCT
     risk_amount = portfolio_size * risk_pct
     
@@ -1115,10 +1151,10 @@ def calculate_trade_details(request: TradeDetailsRequest):
         }
 
 @app.get("/api/analytics/overview")
-def get_analytics_overview():
+def get_analytics_overview(mode: Optional[str] = None):
     """Get trading analytics overview"""
     try:
-        df = load_trades()
+        df = load_trades(mode)
         if df.empty:
             return {
                 "total_trades": 0,
