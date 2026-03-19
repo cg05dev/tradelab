@@ -12,8 +12,21 @@ export function getErrorMessage(error: unknown, fallback = 'Something went wrong
   
   // Check for mode_blocked error (from frontend) or API response
   if (axiosError.response?.data) {
-    return axiosError.response?.data?.detail
-      || axiosError.response?.data?.reason
+    // Handle detail field - can be string, array, or object
+    const detail = axiosError.response?.data?.detail
+    if (detail) {
+      if (typeof detail === 'string') return detail
+      if (Array.isArray(detail)) {
+        return detail
+          .map(item => typeof item === 'string' ? item : item?.msg || item?.message || JSON.stringify(item))
+          .join('. ')
+      }
+      if (typeof detail === 'object') {
+        return detail?.msg || detail?.message || JSON.stringify(detail)
+      }
+    }
+    // Fallback to reason or error fields
+    return axiosError.response?.data?.reason
       || axiosError.response?.data?.error
       || fallback
   }

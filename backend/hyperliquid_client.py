@@ -78,22 +78,20 @@ class HyperliquidClient:
             if self._wallet_address and self._private_key:
                 # Create wallet from private key (required by SDK)
                 wallet = eth_account.Account.from_key(self._private_key)
-                derived_address = wallet.address
-                env_address = self._wallet_address
+                self._signer_address = wallet.address  # Address derived from private key (for signing)
+                # self._wallet_address remains the ENV value (main account to trade on behalf of)
                 
-                print(f"[DEBUG] ENV wallet address: {env_address}")
-                print(f"[DEBUG] Derived wallet address from private key: {derived_address}")
-                print(f"[DEBUG] Addresses match: {env_address.lower() == derived_address.lower()}")
+                print(f"[DEBUG] Main wallet address (from ENV): {self._wallet_address}")
+                print(f"[DEBUG] Signer address (derived from key): {self._signer_address}")
+                print(f"[DEBUG] Addresses match: {self._wallet_address.lower() == self._signer_address.lower()}")
                 
-                # Use checksum address from wallet object (not the raw env var)
-                self._wallet_address = derived_address
                 self._exchange_client = Exchange(
-                    wallet,  # First param: wallet object
+                    wallet,  # First param: wallet object (for signing)
                     base_url,  # Second param: base URL
-                    account_address=self._wallet_address  # Keyword arg
+                    account_address=self._wallet_address  # Keyword arg: main account to trade on behalf of
                 )
                 print(f"[OK] Exchange client connected for {self._wallet_address[:10]}...")
-                print(f"[INFO] Using checksum address: {self._wallet_address}")
+                print(f"[INFO] Trading on behalf of: {self._wallet_address}")
             else:
                 print("[INFO] Info client only (no trading credentials provided)")
             

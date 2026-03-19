@@ -30,7 +30,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     queryKey: ['hyperliquid-price', asset],
     queryFn: async () => (await getHyperliquidPrice(asset.split('-')[0] ?? '')).data?.price ?? null,
     enabled: Boolean(asset),
-    refetchInterval: 1000,
+    refetchInterval: 670,
     refetchOnWindowFocus: false,
     retry: 1,
   })
@@ -61,7 +61,17 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
         throw { error: 'mode_blocked', mode: 'planning' as const, reason: 'Trading is in planning mode. Switch to live mode to execute real trades.' }
       }
       if (!asset || !currentPrice) throw new Error('Please select an asset first')
-      const trade = { asset, direction, leverage, riskPercentage, stopLoss, takeProfits, thesis, entryPrice: currentPrice }
+      const trade = {
+        asset,
+        direction,
+        leverage,
+        entry_price: currentPrice,
+        stop_loss: stopLoss ?? 0,
+        position_size: tradeDetails?.positionSizeDollars ?? 0,
+        take_profits: takeProfits,
+        stop_losses: stopLoss ? [{ price: stopLoss, allocation: 100 }] : [],
+        thesis,
+      }
       await addTrade(trade)
       const order: HyperliquidOrderRequest = {
         coin: asset.split('-')[0] ?? asset,
@@ -78,6 +88,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['closed-trades'] })
       await queryClient.invalidateQueries({ queryKey: ['portfolio'] })
+      await queryClient.invalidateQueries({ queryKey: ['open-trades'] })
       await queryClient.invalidateQueries({ queryKey: ['mode'] })
       onTradeAdded?.()
       alert('Trade saved to journal and order placed on Hyperliquid!')

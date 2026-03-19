@@ -72,12 +72,12 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
   useEffect(() => {
     loadTrades()
     
-    // Poll prices every 5 seconds
+    // Poll prices every 670ms
     const interval = setInterval(() => {
       if (trades.length > 0) {
         fetchCurrentPrices(trades)
       }
-    }, 5000)
+    }, 670)
     
     return () => clearInterval(interval)
   }, [loadTrades, fetchCurrentPrices, trades.length])
@@ -348,8 +348,11 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
                     </span>
                   </div>
                   <p className={`text-sm font-medium ${pnl !== null ? (pnl >= 0 ? 'text-green-400' : 'text-red-400') : 'text-neutral-400'}`}>
-                    {pnl !== null 
-                      ? `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(0)}`
+                    {pnl !== null
+                      ? (() => {
+                          const pnlPercent = margin > 0 ? (pnl / margin) * 100 : 0
+                          return `${pnl >= 0 ? '+' : ''}$${pnl.toFixed(2)} (${pnl >= 0 ? '+' : ''}${pnlPercent.toFixed(1)}%)`
+                        })()
                       : '-'
                     }
                   </p>
