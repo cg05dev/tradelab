@@ -56,7 +56,7 @@ export default function PortfolioHeader() {
       <div className="flex items-center gap-4">
         <button
           onClick={handleUpdatePortfolio}
-          className="text-xl font-light text-white hover:text-neutral-300 transition-colors cursor-pointer"
+          className="text-xl font-light text-white border border-transparent rounded-md px-2 py-1 -mx-2 -my-1 hover:text-neutral-200 hover:border-neutral-700 hover:bg-white/[0.03] hover:underline underline-offset-4 transition-colors cursor-pointer focus:outline-none focus-visible:border-green-500/50 focus-visible:bg-green-500/5"
         >
           ${portfolioSize.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </button>
