@@ -10,7 +10,7 @@ const MAINTENANCE_MARGIN = 0.0125
 
 export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void }) {
   const queryClient = useQueryClient()
-  const [asset, setAsset] = useState('BTC-USDC')
+  const [asset] = useState('BTC-USDC')
   const [direction, setDirection] = useState('long')
   const [leverage, setLeverage] = useState(10)
   const [riskPercentage, setRiskPercentage] = useState(2.0)

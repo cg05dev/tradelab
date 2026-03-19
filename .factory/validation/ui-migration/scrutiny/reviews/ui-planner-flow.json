@@ -1,0 +1,15 @@
+{
+  "featureId": "ui-planner-flow",
+  "reviewedAt": "2026-03-19T00:00:00Z",
+  "commitId": "79fe43a",
+  "transcriptSkeletonReviewed": true,
+  "diffReviewed": true,
+  "status": "pass",
+  "codeReview": {
+    "summary": "The trade planner now correctly integrates with the mode API. It checks the mode status before trade execution and properly blocks attempts in planning mode, displaying a user-friendly error. This implementation ensures that execution security is enforced at the UI level, reinforcing backend protections.",
+    "issues": []
+  },
+  "sharedStateObservations": [],
+  "addressesFailureFrom": null,
+  "summary": "UI Planner Flow pass: The mode awareness and execution blocking features are implemented and validated as requested."
+}

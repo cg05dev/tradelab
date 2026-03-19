@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type RefObject } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Layout from './components/Layout'
 import PlanTrade from './pages/PlanTrade'
 import OpenTrades from './pages/OpenTrades'

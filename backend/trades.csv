@@ -1,1 +1,2 @@
 Date,Asset,Direction,Entry,SL,TPs,SLs,Position_Size,Confirmations,Thesis,Status,Exit_Price,P&L,Hold_Time,TP_Hit,TP_Price,SL_Hit,SL_Price,Hit_TPs,Margin,Leverage
+2026-03-18 22:41:51,BTC,long,50000.0,45000.0,"[{""price"": 60000.0, ""allocation"": 1.0}]","[{""price"": 45000.0, ""allocation"": 1.0}]",1000.0,,,Closed,60000.0,200.0,0.0h,False,,False,,[],100.0,10
