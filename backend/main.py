@@ -138,20 +138,29 @@ def load_mode():
         if os.path.exists(CONFIG_FILE):
             with open(CONFIG_FILE, 'r') as f:
                 config = json.load(f)
+                # Check if mode key exists
+                has_mode = 'mode' in config
                 mode = config.get('mode', 'planning')
-                # Validate mode
-                if mode in ('planning', 'live'):
-                    return mode
-                else:
-                    # Invalid mode, default to planning and persist corrected config
-                    print(f"[WARNING] Invalid mode '{mode}' in config, defaulting to 'planning'")
+                # If mode key is missing or invalid, fix it
+                if not has_mode or mode not in ('planning', 'live'):
+                    if not has_mode:
+                        print(f"[WARNING] Missing mode key in config, defaulting to 'planning'")
+                    else:
+                        print(f"[WARNING] Invalid mode '{mode}' in config, defaulting to 'planning'")
                     config['mode'] = 'planning'
                     with open(CONFIG_FILE, 'w') as f:
                         json.dump(config, f)
                     return 'planning'
+                return mode
         return 'planning'
     except Exception as e:
         print(f"[WARNING] Error loading mode: {e}, defaulting to 'planning'")
+        # Config file is corrupt, reset it with default mode
+        try:
+            with open(CONFIG_FILE, 'w') as f:
+                json.dump({'portfolio_size': load_portfolio_size(), 'mode': 'planning'}, f)
+        except Exception:
+            pass  # If we can't write, just return planning
         return 'planning'
 
 def save_mode(mode):
