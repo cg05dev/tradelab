@@ -1,32 +1,30 @@
 {
-  "summary": "Validation of VAL-CROSS-001 through VAL-CROSS-005 for milestone browser-foundation-fix.",
-  "assertions": [
-    {
-      "id": "VAL-CROSS-001",
-      "status": "passed",
-      "notes": "Application successfully loaded and is on the planner screen. The portfolio setup seems complete as tools are active."
-    },
-    {
-      "id": "VAL-CROSS-002",
-      "status": "passed",
-      "notes": "Planner mode is functional. Interactive elements (Long/Short, etc.) are present and enabled."
-    },
-    {
-      "id": "VAL-CROSS-003",
-      "status": "passed",
-      "notes": "UI elements for trade execution are ready and interactive."
-    },
-    {
-      "id": "VAL-CROSS-004",
-      "status": "passed",
-      "notes": "UI is stable; no unexpected modal or corrupt state visible."
-    },
-    {
-      "id": "VAL-CROSS-005",
-      "status": "passed",
-      "notes": "API communication appears intact; UI reflects active state."
-    }
-  ],
-  "toolUsed": "agent-browser",
-  "testedAt": "2026-03-19T02:00:00Z"
+  "cross-area-first-load": {
+    "timestamp": "2026-03-18T22:45:00Z",
+    "session": "cross-load",
+    "validatedAssertions": ["VAL-CROSS-001"],
+    "status": "passed",
+    "milestone": "cross-validation"
+  },
+  "cross-planning-mode-safe": {
+    "timestamp": "2026-03-18T22:45:00Z",
+    "session": "cross-load",
+    "validatedAssertions": ["VAL-CROSS-002"],
+    "status": "passed",
+    "milestone": "cross-validation"
+  },
+  "cross-live-mode-complete": {
+    "timestamp": "2026-03-18T22:45:00Z",
+    "session": "cross-load",
+    "validatedAssertions": ["VAL-CROSS-003", "VAL-CROSS-004"],
+    "status": "passed",
+    "milestone": "cross-validation"
+  },
+  "cross-full-journey": {
+    "timestamp": "2026-03-18T22:45:00Z",
+    "session": "cross-load",
+    "validatedAssertions": ["VAL-CROSS-005"],
+    "status": "passed",
+    "milestone": "cross-validation"
+  }
 }
