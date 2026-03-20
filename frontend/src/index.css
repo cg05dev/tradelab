@@ -419,11 +419,9 @@ select:focus {
   border-radius: 16px;
 }
 
-/* Glass Panel - Live Mode (Frosted Translucent) */
+/* Glass Panel - Live Mode */
 .glass-panel-live {
-  background: rgba(0, 0, 0, 0.38);
-  backdrop-filter: blur(16px) saturate(92%);
-  -webkit-backdrop-filter: blur(16px) saturate(92%);
+  background: #0f0f12;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
 }
@@ -435,11 +433,9 @@ select:focus {
   border-radius: 12px;
 }
 
-/* Glass Card - Live Mode (Frosted Translucent) */
+/* Glass Card - Live Mode */
 .glass-card-live {
-  background: rgba(0, 0, 0, 0.38);
-  backdrop-filter: blur(16px) saturate(92%);
-  -webkit-backdrop-filter: blur(16px) saturate(92%);
+  background: #0f0f12;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
 }
