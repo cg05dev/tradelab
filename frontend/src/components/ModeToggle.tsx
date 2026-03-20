@@ -23,7 +23,7 @@ export default function ModeToggle() {
       <span
         className={`px-3 py-1 text-xs font-semibold transition-colors ${
           mode === 'live'
-            ? 'text-emerald-400'
+            ? 'text-green-400'
             : 'text-neutral-500'
         }`}
       >
