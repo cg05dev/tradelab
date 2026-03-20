@@ -58,7 +58,7 @@ function App() {
         <PortfolioHeader />
 
         {/* Bottom: Single Column Layout */}
-        <div className="space-y-4">
+        <div className="space-y-8">
           {/* Trade Planning */}
           <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
             <PlanTrade onTradeAdded={handleTradeAdded} />
