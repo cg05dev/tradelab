@@ -16,7 +16,7 @@ body {
   -webkit-font-smoothing: subpixel-antialiased;
   -moz-osx-font-smoothing: auto;
   text-rendering: optimizeLegibility;
-  background: #0a0a0a;
+  background: #0f0f12;
   min-height: 100vh;
   color: #ffffff;
   font-size: 14px;
@@ -85,13 +85,13 @@ input[type="number"] {
 
 /* Focus visible styles */
 *:focus-visible {
-  outline: 2px solid #10b981;
+  outline: 2px solid #818cf8;
   outline-offset: 2px;
 }
 
 /* Selection styles */
 ::selection {
-  background-color: #10b981;
+  background-color: #6366f1;
   color: #ffffff;
 }
 
@@ -100,12 +100,12 @@ input[type="number"] {
   position: relative;
   background:
     /* Subtle radial glow from center */
-    radial-gradient(ellipse 100% 100% at 50% 50%, rgba(16, 185, 129, 0.03) 0%, transparent 60%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, rgba(129, 140, 248, 0.04) 0%, transparent 60%),
     /* Corner accents */
-    radial-gradient(ellipse 40% 40% at 0% 0%, rgba(16, 185, 129, 0.02) 0%, transparent 50%),
-    radial-gradient(ellipse 40% 40% at 100% 100%, rgba(16, 185, 129, 0.02) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 40% at 0% 0%, rgba(129, 140, 248, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 40% at 100% 100%, rgba(129, 140, 248, 0.03) 0%, transparent 50%),
     /* Base gradient */
-    linear-gradient(135deg, #0a0a0a 0%, #0d0d0d 25%, #0a0a0a 50%, #0c0c0c 75%, #0a0a0a 100%);
+    linear-gradient(135deg, #0f0f12 0%, #141420 25%, #0f0f12 50%, #12121a 75%, #0f0f12 100%);
   background-attachment: fixed;
 }
 
@@ -116,11 +116,11 @@ input[type="number"] {
   inset: 0;
   background:
     /* Wavy contour lines - flowing terrain curves */
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0,150 Q150,100 300,150 T600,140 T900,160 T1200,150' fill='none' stroke='rgba(16, 185, 129, 0.07)' stroke-width='1.5'/%3E%3Cpath d='M0,200 Q200,140 400,200 T800,200 T1200,200' fill='none' stroke='rgba(16, 185, 129, 0.08)' stroke-width='1.5'/%3E%3Cpath d='M0,400 Q250,340 500,400 T1000,380 T1400,400' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1'/%3E%3Cpath d='M0,500 Q300,420 600,500 T1200,480' fill='none' stroke='rgba(16, 185, 129, 0.07)' stroke-width='1.5'/%3E%3Cpath d='M0,700 Q400,620 800,700 T1400,680' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0,150 Q150,100 300,150 T600,140 T900,160 T1200,150' fill='none' stroke='rgba(165, 180, 252, 0.08)' stroke-width='1.5'/%3E%3Cpath d='M0,200 Q200,140 400,200 T800,200 T1200,200' fill='none' stroke='rgba(165, 180, 252, 0.09)' stroke-width='1.5'/%3E%3Cpath d='M0,400 Q250,340 500,400 T1000,380 T1400,400' fill='none' stroke='rgba(165, 180, 252, 0.07)' stroke-width='1'/%3E%3Cpath d='M0,500 Q300,420 600,500 T1200,480' fill='none' stroke='rgba(165, 180, 252, 0.08)' stroke-width='1.5'/%3E%3Cpath d='M0,700 Q400,620 800,700 T1400,680' fill='none' stroke='rgba(165, 180, 252, 0.07)' stroke-width='1'/%3E%3C/svg%3E"),
     /* Diagonal flowing waves */
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M200,0 Q280,300 200,600 T250,1000' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1.5'/%3E%3Cpath d='M600,0 Q520,250 600,500 T550,1000' fill='none' stroke='rgba(16, 185, 129, 0.05)' stroke-width='1'/%3E%3Cpath d='M800,0 Q720,250 800,500 T750,1000' fill='none' stroke='rgba(16, 185, 129, 0.05)' stroke-width='1'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M200,0 Q280,300 200,600 T250,1000' fill='none' stroke='rgba(165, 180, 252, 0.07)' stroke-width='1.5'/%3E%3Cpath d='M600,0 Q520,250 600,500 T550,1000' fill='none' stroke='rgba(165, 180, 252, 0.06)' stroke-width='1'/%3E%3Cpath d='M800,0 Q720,250 800,500 T750,1000' fill='none' stroke='rgba(165, 180, 252, 0.06)' stroke-width='1'/%3E%3C/svg%3E"),
     /* Organic terrain curves */
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0,300 C250,240 500,360 750,300 S1200,260 1400,300' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1.5'/%3E%3Cpath d='M0,350 C300,280 600,420 900,350 S1200,300 1400,350' fill='none' stroke='rgba(16, 185, 129, 0.07)' stroke-width='1.5'/%3E%3Cpath d='M0,600 C200,540 500,660 800,600 S1200,560 1400,600' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1'/%3E%3C/svg%3E");
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0,300 C250,240 500,360 750,300 S1200,260 1400,300' fill='none' stroke='rgba(165, 180, 252, 0.07)' stroke-width='1.5'/%3E%3Cpath d='M0,350 C300,280 600,420 900,350 S1200,300 1400,350' fill='none' stroke='rgba(165, 180, 252, 0.08)' stroke-width='1.5'/%3E%3Cpath d='M0,600 C200,540 500,660 800,600 S1200,560 1400,600' fill='none' stroke='rgba(165, 180, 252, 0.07)' stroke-width='1'/%3E%3C/svg%3E");
   background-size: 100% 100%;
   pointer-events: none;
   opacity: 0.9;
@@ -132,9 +132,9 @@ input[type="number"] {
   position: absolute;
   inset: 0;
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0,100 Q300,50 600,100 T1200,90' fill='none' stroke='rgba(16, 185, 129, 0.04)' stroke-width='1'/%3E%3Cpath d='M0,800 Q400,750 800,800' fill='none' stroke='rgba(16, 185, 129, 0.04)' stroke-width='1'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0,100 Q300,50 600,100 T1200,90' fill='none' stroke='rgba(165, 180, 252, 0.05)' stroke-width='1'/%3E%3Cpath d='M0,800 Q400,750 800,800' fill='none' stroke='rgba(165, 180, 252, 0.05)' stroke-width='1'/%3E%3C/svg%3E"),
     /* Fine texture overlay */
-    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.008) 1px, transparent 0);
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.01) 1px, transparent 0);
   background-size: 100% 100%, 30px 30px;
   pointer-events: none;
   opacity: 0.85;
@@ -154,8 +154,8 @@ input[type="number"] {
 }
 
 .card.cursor-pointer:hover {
-  border-color: rgba(16, 185, 129, 0.5);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(16, 185, 129, 0.2);
+  border-color: rgba(165, 180, 252, 0.5);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(165, 180, 252, 0.2);
 }
 
 /* Button Enhancements */
@@ -182,20 +182,20 @@ input[type="number"] {
 
 .btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 12px rgba(165, 180, 252, 0.3);
 }
 
 /* Input Focus Enhancements */
 input:focus,
 textarea:focus,
 select:focus {
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
-  border-color: rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.1);
+  border-color: rgba(165, 180, 252, 0.5);
 }
 
 /* Subtle Glow for Important Elements */
 .glow-green {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 20px rgba(165, 180, 252, 0.15);
 }
 
 .glow-red {
@@ -216,20 +216,20 @@ select:focus {
   transform: translateY(-50%);
   width: 3px;
   height: 16px;
-  background: linear-gradient(180deg, #10b981, #059669);
+  background: linear-gradient(180deg, #a5b4fc, #818cf8);
   border-radius: 2px;
 }
 
 /* Metric Cards */
 .metric-card {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(16, 185, 129, 0.02) 100%);
-  border: 1px solid rgba(16, 185, 129, 0.2);
+  background: linear-gradient(135deg, rgba(165, 180, 252, 0.05) 0%, rgba(165, 180, 252, 0.02) 100%);
+  border: 1px solid rgba(165, 180, 252, 0.2);
   transition: all 0.3s ease;
 }
 
 .metric-card:hover {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%);
-  border-color: rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, rgba(165, 180, 252, 0.08) 0%, rgba(165, 180, 252, 0.04) 100%);
+  border-color: rgba(165, 180, 252, 0.3);
   transform: translateY(-2px);
 }
 
@@ -263,44 +263,44 @@ select:focus {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #10b981;
+  background: #a5b4fc;
   cursor: pointer;
-  border: 2px solid #000000;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+  border: 2px solid #1a1a2e;
+  box-shadow: 0 0 0 2px rgba(165, 180, 252, 0.3);
   transition: all 0.2s ease;
 }
 
 .leverage-slider::-webkit-slider-thumb:hover {
-  background: #059669;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.4);
+  background: #c7d2fe;
+  box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.4);
   transform: scale(1.1);
 }
 
 .leverage-slider::-webkit-slider-thumb:active {
   transform: scale(1.15);
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 0 4px rgba(165, 180, 252, 0.5);
 }
 
 .leverage-slider::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #10b981;
+  background: #a5b4fc;
   cursor: pointer;
-  border: 2px solid #000000;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+  border: 2px solid #1a1a2e;
+  box-shadow: 0 0 0 2px rgba(165, 180, 252, 0.3);
   transition: all 0.2s ease;
 }
 
 .leverage-slider::-moz-range-thumb:hover {
-  background: #059669;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.4);
+  background: #c7d2fe;
+  box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.4);
   transform: scale(1.1);
 }
 
 .leverage-slider::-moz-range-thumb:active {
   transform: scale(1.15);
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 0 4px rgba(165, 180, 252, 0.5);
 }
 
 .leverage-slider::-moz-range-track {
@@ -322,44 +322,44 @@ select:focus {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #10b981;
+  background: #a5b4fc;
   cursor: pointer;
-  border: 2px solid #000000;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+  border: 2px solid #1a1a2e;
+  box-shadow: 0 0 0 2px rgba(165, 180, 252, 0.3);
   transition: all 0.2s ease;
 }
 
 .tp-count-slider::-webkit-slider-thumb:hover {
-  background: #059669;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.4);
+  background: #c7d2fe;
+  box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.4);
   transform: scale(1.1);
 }
 
 .tp-count-slider::-webkit-slider-thumb:active {
   transform: scale(1.15);
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 0 4px rgba(165, 180, 252, 0.5);
 }
 
 .tp-count-slider::-moz-range-thumb {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #10b981;
+  background: #a5b4fc;
   cursor: pointer;
-  border: 2px solid #000000;
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.3);
+  border: 2px solid #1a1a2e;
+  box-shadow: 0 0 0 2px rgba(165, 180, 252, 0.3);
   transition: all 0.2s ease;
 }
 
 .tp-count-slider::-moz-range-thumb:hover {
-  background: #059669;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.4);
+  background: #c7d2fe;
+  box-shadow: 0 0 0 3px rgba(165, 180, 252, 0.4);
   transform: scale(1.1);
 }
 
 .tp-count-slider::-moz-range-thumb:active {
   transform: scale(1.15);
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.5);
+  box-shadow: 0 0 0 4px rgba(165, 180, 252, 0.5);
 }
 
 .tp-count-slider::-moz-range-track {
@@ -369,18 +369,14 @@ select:focus {
 
 /* Glass Panel Utility */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.003);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #0f0f12;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
 }
 
 /* Glass Card Variant - for smaller elements */
 .glass-card {
-  background: rgba(255, 255, 255, 0.003);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: #0f0f12;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
 }

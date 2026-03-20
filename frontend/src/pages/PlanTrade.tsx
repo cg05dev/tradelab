@@ -103,8 +103,8 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <div className="space-y-6">
-        <div className="glass-panel p-6 shadow-2xl shadow-black/20">
+      <div className="space-y-0">
+        <div className="glass-panel p-6 shadow-2xl shadow-black/20 rounded-b-none">
           <form onSubmit={(e) => e.preventDefault()} className="space-y-8">
             <div className="flex items-center justify-between">
               <div>
@@ -125,7 +125,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
         <button
           onClick={() => executeMutation.mutate()}
           disabled={executeMutation.isPending}
-          className={`w-full py-3 rounded-xl text-sm font-semibold glass-panel transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed border 
+          className={`w-full py-3 rounded-t-none rounded-b-xl text-sm font-semibold glass-panel transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed border-t-0 border 
             ${mode === 'paper' ? 'border-indigo-400/30 text-indigo-400 shadow-[0_10px_20px_-10px_rgba(129,140,248,0.3)] hover:shadow-[0_15px_25px_-10px_rgba(129,140,248,0.5)]' : 
               direction === 'short' ? 'border-red-400/30 text-red-400 shadow-[0_10px_20px_-10px_rgba(248,113,113,0.3)] hover:shadow-[0_15px_25px_-10px_rgba(248,113,113,0.5)]' : 
               'border-green-400/30 text-green-400 shadow-[0_10px_20px_-10px_rgba(74,222,128,0.3)] hover:shadow-[0_15px_25px_-10px_rgba(74,222,128,0.5)]'
