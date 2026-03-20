@@ -54,7 +54,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="glass-panel p-6 shadow-2xl shadow-black/20 space-y-6">
+      <section className={`${mode === 'paper' ? 'glass-panel' : 'glass-panel-live'} p-6 shadow-2xl shadow-black/20 space-y-6`}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h2 className="text-lg font-semibold text-white">Performance Overview</h2>
@@ -67,10 +67,10 @@ export default function AnalyticsPage() {
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <MetricCard label="Total P&L" value={metricsQuery.data?.total_pnl ?? 0} showCurrency isPnl />
-          <MetricCard label="Win Rate" value={`${(metricsQuery.data?.win_rate ?? 0).toFixed(1)}%`} />
-          <MetricCard label="Avg Win" value={metricsQuery.data?.avg_win ?? 0} showCurrency />
-          <MetricCard label="Avg Loss" value={metricsQuery.data?.avg_loss ?? 0} showCurrency isLoss />
+          <MetricCard label="Total P&L" value={metricsQuery.data?.total_pnl ?? 0} showCurrency isPnl mode={mode} />
+          <MetricCard label="Win Rate" value={`${(metricsQuery.data?.win_rate ?? 0).toFixed(1)}%`} mode={mode} />
+          <MetricCard label="Avg Win" value={metricsQuery.data?.avg_win ?? 0} showCurrency mode={mode} />
+          <MetricCard label="Avg Loss" value={metricsQuery.data?.avg_loss ?? 0} showCurrency isLoss mode={mode} />
         </div>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
@@ -91,7 +91,7 @@ export default function AnalyticsPage() {
         </div>
       </section>
 
-      <section className="glass-panel p-6 shadow-2xl shadow-black/20 space-y-4">
+      <section className={`${mode === 'paper' ? 'glass-panel' : 'glass-panel-live'} p-6 shadow-2xl shadow-black/20 space-y-4`}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <h2 className="text-lg font-semibold text-white">Trade History</h2>
           <div className="text-sm text-neutral-400">{totalCount} total trades</div>
@@ -125,7 +125,7 @@ export default function AnalyticsPage() {
             const leverage = trade.Leverage
 
             return (
-              <div key={`${trade._index ?? index}`} className="glass-card p-4 flex items-center justify-between gap-4">
+              <div key={`${trade._index ?? index}`} className={`${mode === 'paper' ? 'glass-card' : 'glass-card-live'} p-4 flex items-center justify-between gap-4`}>
                 {/* Left: Ticker + Badge + Date */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="flex items-center gap-2">
@@ -180,7 +180,7 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 2 }).format(value)
 }
 
-function MetricCard({ label, value, showCurrency = false, isPnl = false, isLoss = false }: { label: string; value: number | string; showCurrency?: boolean; isPnl?: boolean; isLoss?: boolean }) {
+function MetricCard({ label, value, showCurrency = false, isPnl = false, isLoss = false, mode }: { label: string; value: number | string; showCurrency?: boolean; isPnl?: boolean; isLoss?: boolean; mode: 'paper' | 'live' }) {
   const numValue = typeof value === 'number' ? value : parseFloat(value) || 0
   const display = typeof value === 'number'
     ? (showCurrency ? formatCurrency(numValue) : numValue.toFixed(2))
@@ -206,7 +206,7 @@ function MetricCard({ label, value, showCurrency = false, isPnl = false, isLoss 
   }
 
   return (
-    <div className="glass-card p-4">
+    <div className={`${mode === 'paper' ? 'glass-card' : 'glass-card-live'} p-4`}>
       <div className="text-xs uppercase tracking-wider text-neutral-500">{label}</div>
       <div className={`mt-2 text-2xl font-semibold ${colorClass}`}>
         {display}

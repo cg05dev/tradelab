@@ -62,12 +62,12 @@ function App() {
         {/* Bottom: Single Column Layout */}
         <div className="space-y-8">
           {/* Trade planning */}
-          <div className={`border border-neutral-700/30 rounded-xl backdrop-blur-sm p-6 shadow-2xl shadow-black/20 transition-all duration-1000 ${mode === 'paper' ? 'bg-gradient-to-b from-neutral-900/20 to-black/20' : 'bg-[#1c1c1e]/80'}`}>
+          <div className={`border border-neutral-700/30 rounded-xl backdrop-blur-sm p-6 shadow-2xl shadow-black/20 transition-all duration-1000 ${mode === 'paper' ? 'bg-gradient-to-b from-neutral-900/20 to-black/20' : 'bg-black/38 backdrop-blur-xl'}`}>
             <PlanTrade onTradeAdded={handleTradeAdded} />
           </div>
 
           {/* Open Trades - Full Width */}
-          <div className={`border border-neutral-700/30 rounded-xl backdrop-blur-sm p-6 shadow-2xl shadow-black/20 transition-all duration-1000 ${mode === 'paper' ? 'bg-gradient-to-b from-neutral-900/20 to-black/20' : 'bg-[#1c1c1e]/80'}`}>
+          <div className={`border border-neutral-700/30 rounded-xl backdrop-blur-sm p-6 shadow-2xl shadow-black/20 transition-all duration-1000 ${mode === 'paper' ? 'bg-gradient-to-b from-neutral-900/20 to-black/20' : 'bg-black/38 backdrop-blur-xl'}`}>
             <h2 className="text-sm font-medium text-neutral-400 mb-4">Open Trades</h2>
             <OpenTrades ref={openTradesRef} />
           </div>
