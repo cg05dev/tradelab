@@ -23,7 +23,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
   const [thesis, setThesis] = useState('')
   const [currentPrice, setCurrentPrice] = useState<number | null>(null)
   const [tradeDetails, setTradeDetails] = useState<TradeDetails | null>(null)
-  const portfolioQuery = useQuery({ queryKey: ['portfolio'], queryFn: async () => (await getPortfolio()).data })
+  const portfolioQuery = useQuery({ queryKey: ['portfolio', mode], queryFn: async () => (await getPortfolio(mode)).data, refetchInterval: 1000 })
   const assetsQuery = useQuery<HyperliquidAsset[]>({ queryKey: ['hyperliquid-assets'], queryFn: async () => (await getHyperliquidAssets()).data?.assets || [] })
 
   const priceQuery = useQuery({
@@ -42,18 +42,58 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
 
   useEffect(() => {
     if (!currentPrice) return
+    
+    const portfolioSize = portfolioQuery.data?.portfolio_size || 2000
+    const riskAmount = portfolioSize * riskPercentage / 100
+    
+    // Calculate liquidation price
     const liquidationPrice = direction === 'long'
       ? currentPrice * (1 - (1 / leverage) + MAINTENANCE_MARGIN)
       : currentPrice * (1 + (1 / leverage) - MAINTENANCE_MARGIN)
-    const positionSize = ((portfolioQuery.data?.portfolio_size || 2000) * riskPercentage / 100 * leverage) / currentPrice
-    const positionSizeDollars = positionSize * currentPrice
+    
+    // Check if stop loss is valid (before liquidation price)
+    const isStopLossValid = stopLoss && stopLoss > 0 && (
+      direction === 'long' 
+        ? stopLoss > liquidationPrice && stopLoss < currentPrice
+        : stopLoss < liquidationPrice && stopLoss > currentPrice
+    )
+    
+    // Calculate risk distance: use SL if valid, otherwise use liquidation
+    const riskDistancePercent = isStopLossValid
+      ? direction === 'long'
+        ? (currentPrice - stopLoss) / currentPrice
+        : (stopLoss - currentPrice) / currentPrice
+      : direction === 'long'
+        ? (currentPrice - liquidationPrice) / currentPrice
+        : (liquidationPrice - currentPrice) / currentPrice
+    
+    // Position size based on risk distance (how much you can lose per dollar of position)
+    const positionSizeDollars = riskAmount / riskDistancePercent
+    const positionSize = positionSizeDollars / currentPrice
     const marginRequired = positionSizeDollars / leverage
-    const estimatedLoss = (portfolioQuery.data?.portfolio_size || 2000) * riskPercentage / 100
-    const tpProfits = takeProfits.filter(tp => tp.price > 0 && tp.allocation > 0).map((tp, index) => ({ ...tp, index: index + 1, profit: ((tp.price - currentPrice) * positionSize * tp.allocation / 100) * (direction === 'short' ? -1 : 1) }))
+    
+    const tpProfits = takeProfits.filter(tp => tp.price > 0 && tp.allocation > 0).map((tp, index) => ({ 
+      ...tp, 
+      index: index + 1, 
+      profit: ((tp.price - currentPrice) * positionSize * tp.allocation / 100) * (direction === 'short' ? -1 : 1) 
+    }))
     const estimatedProfit = tpProfits.reduce((sum, tp) => sum + tp.profit, 0)
-    const riskRewardRatio = estimatedLoss > 0 ? estimatedProfit / estimatedLoss : 0
-    setTradeDetails({ liquidationPrice, positionSize, positionSizeDollars, marginRequired, riskRewardRatio, estimatedLoss, estimatedProfit, tpProfits, positionValue: positionSizeDollars, currentPrice })
-  }, [currentPrice, direction, leverage, portfolioQuery.data?.portfolio_size, riskPercentage, takeProfits])
+    const riskRewardRatio = riskAmount > 0 ? estimatedProfit / riskAmount : 0
+    
+    setTradeDetails({ 
+      liquidationPrice, 
+      positionSize, 
+      positionSizeDollars, 
+      marginRequired, 
+      riskRewardRatio, 
+      estimatedLoss: riskAmount, 
+      estimatedProfit, 
+      tpProfits, 
+      positionValue: positionSizeDollars, 
+      currentPrice,
+      isStopLossValid,
+    })
+  }, [currentPrice, direction, leverage, portfolioQuery.data?.portfolio_size, riskPercentage, takeProfits, stopLoss])
 
   const executeMutation = useMutation({
     mutationFn: async () => {

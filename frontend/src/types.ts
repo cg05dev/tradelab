@@ -14,6 +14,7 @@ export type TradeDetails = {
   estimatedLoss: number
   riskRewardRatio: number
   tpProfits: Array<{ index: number; price: number; allocation: number; profit: number }>
+  isStopLossValid?: boolean
 }
 export type Trade = {
   id?: number | string

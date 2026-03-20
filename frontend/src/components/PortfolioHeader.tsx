@@ -86,7 +86,7 @@ export default function PortfolioHeader() {
   })()
 
   const updateMutation = useMutation({
-    mutationFn: updatePortfolio,
+    mutationFn: ({ portfolioSize, mode }: { portfolioSize: number; mode?: string }) => updatePortfolio(portfolioSize, mode),
     onSuccess: () => {
       void portfolioQuery.refetch()
       void analyticsQuery.refetch()
@@ -97,7 +97,7 @@ export default function PortfolioHeader() {
     const current = String(portfolioQuery.data?.portfolio_size ?? 0)
     const newSize = prompt('Enter new portfolio size:', current)
     if (!newSize || Number.isNaN(parseFloat(newSize))) return
-    updateMutation.mutate(parseFloat(newSize))
+    updateMutation.mutate({ portfolioSize: parseFloat(newSize), mode })
   }
 
   if (portfolioQuery.isLoading || analyticsQuery.isLoading) {
