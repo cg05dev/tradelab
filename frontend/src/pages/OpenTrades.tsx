@@ -331,7 +331,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
             return (
               <div 
                 key={index} 
-                className="group p-4 border border-neutral-700/30 rounded-lg hover:bg-white/[0.02] transition-colors cursor-pointer"
+                className="group p-4 glass-card hover:bg-white/[0.04] transition-colors cursor-pointer"
                 onClick={() => {
                   setSelectedTradeForDetail(trade)
                   setShowTradeDetailModal(true)
@@ -447,7 +447,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
       {/* Close Trade Modal */}
       {showCloseModal && selectedTrade && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-black/90 border border-neutral-700/70 rounded p-5 max-w-md w-full backdrop-blur-sm">
+          <div className="glass-panel p-5 max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-medium text-white">Close Trade</h3>
               <button onClick={() => {
@@ -528,7 +528,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
         
         return (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-black/90 border border-neutral-700/70 rounded p-5 max-w-md w-full backdrop-blur-sm">
+            <div className="glass-panel p-5 max-w-md w-full">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-medium text-white">Take Profit Hit</h3>
                 <button onClick={() => setShowTPModal(false)} className="text-neutral-500 hover:text-white">
@@ -578,7 +578,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
         
         return (
           <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-black/90 border border-neutral-700/70 rounded p-5 max-w-md w-full backdrop-blur-sm">
+            <div className="glass-panel p-5 max-w-md w-full">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-medium text-white">Stop Loss Hit</h3>
                 <button onClick={() => setShowSLModal(false)} className="text-neutral-500 hover:text-white">
@@ -663,7 +663,7 @@ function TradeDetailModal({ trade, currentPrice, onClose }: TradeDetailModalProp
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div 
-        className="bg-black/95 border border-neutral-700/60 rounded-xl p-5 max-w-5xl w-full max-h-[90vh] overflow-y-auto backdrop-blur-sm"
+        className="glass-panel p-5 max-w-5xl w-full max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative">
@@ -694,7 +694,7 @@ function TradeDetailModal({ trade, currentPrice, onClose }: TradeDetailModalProp
 
           <div className="space-y-4">
             {/* Trade Overview */}
-            <div className="border border-neutral-700/50 rounded-lg p-3.5 bg-black/40">
+            <div className="glass-card p-3.5">
               <h3 className="text-xs font-medium text-neutral-400 mb-3">Trade Overview</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
@@ -742,7 +742,7 @@ function TradeDetailModal({ trade, currentPrice, onClose }: TradeDetailModalProp
 
             {/* Take Profits */}
             {tps.length > 0 && (
-              <div className="border border-neutral-700/50 rounded-lg p-3.5 bg-black/40">
+              <div className="glass-card p-3.5">
                 <h3 className="text-xs font-medium text-neutral-400 mb-3">Take Profits</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                   {tps.map((tp: { price: number; allocation: number }, tpIdx: number) => {
@@ -775,7 +775,7 @@ function TradeDetailModal({ trade, currentPrice, onClose }: TradeDetailModalProp
 
             {/* Stop Losses */}
             {sls.length > 0 && (
-              <div className="border border-neutral-700/50 rounded-lg p-3.5 bg-black/40">
+              <div className="glass-card p-3.5">
                 <h3 className="text-xs font-medium text-neutral-400 mb-3">Stop Losses</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5">
                   {sls.map((sl: { price: number; allocation: number }, slIdx: number) => {
@@ -808,7 +808,7 @@ function TradeDetailModal({ trade, currentPrice, onClose }: TradeDetailModalProp
 
             {/* Confirmations */}
             {confirmations.length > 0 && (
-              <div className="border border-neutral-700/50 rounded-lg p-3.5 bg-black/40">
+              <div className="glass-card p-3.5">
                 <h3 className="text-xs font-medium text-neutral-400 mb-3">Confirmations</h3>
                 <div className="space-y-1.5">
                   {confirmations.map((conf: string, idx: number) => (
@@ -823,7 +823,7 @@ function TradeDetailModal({ trade, currentPrice, onClose }: TradeDetailModalProp
 
             {/* Thesis */}
             {trade.Thesis && (
-              <div className="border border-neutral-700/50 rounded-lg p-3.5 bg-black/40">
+              <div className="glass-card p-3.5">
                 <h3 className="text-xs font-medium text-neutral-400 mb-3">Trade Thesis</h3>
                 <p className="text-white text-xs leading-relaxed whitespace-pre-wrap bg-black/20 rounded-lg px-3 py-2.5 border border-neutral-700/40">
                   {trade.Thesis}

@@ -54,7 +54,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20 space-y-6">
+      <section className="glass-panel p-6 shadow-2xl shadow-black/20 space-y-6">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h2 className="text-lg font-semibold text-white">Performance Overview</h2>
@@ -91,7 +91,7 @@ export default function AnalyticsPage() {
         </div>
       </section>
 
-      <section className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20 space-y-4">
+      <section className="glass-panel p-6 shadow-2xl shadow-black/20 space-y-4">
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <h2 className="text-lg font-semibold text-white">Trade History</h2>
           <div className="text-sm text-neutral-400">{totalCount} total trades</div>
@@ -125,7 +125,7 @@ export default function AnalyticsPage() {
             const leverage = trade.Leverage
 
             return (
-              <div key={`${trade._index ?? index}`} className="rounded-lg border border-neutral-700 bg-black/40 p-4 flex items-center justify-between gap-4">
+              <div key={`${trade._index ?? index}`} className="glass-card p-4 flex items-center justify-between gap-4">
                 {/* Left: Ticker + Badge + Date */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="flex items-center gap-2">
@@ -206,7 +206,7 @@ function MetricCard({ label, value, showCurrency = false, isPnl = false, isLoss 
   }
 
   return (
-    <div className="rounded-xl border border-neutral-800 bg-black/40 p-4">
+    <div className="glass-card p-4">
       <div className="text-xs uppercase tracking-wider text-neutral-500">{label}</div>
       <div className={`mt-2 text-2xl font-semibold ${colorClass}`}>
         {display}

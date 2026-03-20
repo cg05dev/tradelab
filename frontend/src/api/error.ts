@@ -17,12 +17,13 @@ export function getErrorMessage(error: unknown, fallback = 'Something went wrong
     if (detail) {
       if (typeof detail === 'string') return detail
       if (Array.isArray(detail)) {
-        return detail
-          .map(item => typeof item === 'string' ? item : item?.msg || item?.message || JSON.stringify(item))
+        return (detail as any[])
+          .map((item: any) => (typeof item === 'string' ? item : item?.msg || item?.message || JSON.stringify(item)))
           .join('. ')
       }
       if (typeof detail === 'object') {
-        return detail?.msg || detail?.message || JSON.stringify(detail)
+        const d = detail as any
+        return d?.msg || d?.message || JSON.stringify(detail)
       }
     }
     // Fallback to reason or error fields

@@ -1,1 +1,2 @@
 Date,Asset,Direction,Entry,SL,TPs,SLs,Position_Size,Confirmations,Thesis,Status,Exit_Price,P&L,Hold_Time,TP_Hit,TP_Price,SL_Hit,SL_Price,Hit_TPs,Margin,Leverage
+2026-03-20 00:03:28,BTC-USDC,long,70747.5,0.0,[],[],40.0,,,Closed,70767.5,0.011307820064313226,0.0h,False,,False,,[],4.0,10

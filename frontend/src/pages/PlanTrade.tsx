@@ -104,7 +104,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
       <div className="space-y-6">
-        <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
+        <div className="glass-panel p-6 shadow-2xl shadow-black/20">
           <form onSubmit={(e) => e.preventDefault()} className="space-y-8">
             <div className="flex items-center justify-between">
               <div>
@@ -125,18 +125,27 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
         <button
           onClick={() => executeMutation.mutate()}
           disabled={executeMutation.isPending}
-          className={`w-full py-3 rounded-xl text-sm font-semibold border border-neutral-700/30 bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow ${
-            mode === 'paper'
-              ? 'text-indigo-400 hover:text-indigo-300 shadow-indigo-500/10'
-              : direction === 'short'
-                ? 'text-red-400 hover:text-red-300 shadow-red-500/10'
-                : 'text-emerald-400 hover:text-emerald-300 shadow-emerald-500/10'
-          }`}
+          className={`w-full py-3 rounded-xl text-sm font-semibold glass-panel transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed border 
+            ${mode === 'paper' ? 'border-purple-500/30 text-purple-500 shadow-[0_0_8px_rgba(157,0,255,0.1)] hover:shadow-[0_0_12px_rgba(157,0,255,0.2)]' : 
+              direction === 'short' ? 'border-red-500/30 text-red-500 shadow-[0_0_8px_rgba(255,51,51,0.1)] hover:shadow-[0_0_12px_rgba(255,51,51,0.2)]' : 
+              'border-green-400/30 text-green-400 shadow-[0_0_8px_rgba(0,255,102,0.1)] hover:shadow-[0_0_12px_rgba(0,255,102,0.2)]'
+            }`}
         >
-          {executeMutation.isPending ? 'Executing...' : 'Execute Trade'}
+          {executeMutation.isPending ? 'Executing...' : 'Execute Trade'.split('').map((char, i) => (
+            <span
+              key={i}
+              className="inline-block animate-strobe-text"
+              style={{
+                animationDelay: `${i * 0.1}s`,
+                color: mode === 'paper' ? '#9D00FF' : direction === 'short' ? '#FF3333' : '#00FF66'
+              }}
+            >
+              {char === ' ' ? '\u00A0' : char}
+            </span>
+          ))}
         </button>
       </div>
-      {tradeDetails && <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20 sticky top-8 self-stretch"><h3 className="text-sm font-medium text-neutral-400 mb-6">Trade Details</h3><div className="space-y-6"><div className="grid grid-cols-2 gap-4"><div><p className="text-xs text-neutral-500 mb-1">Entry Price</p><p className="text-xl font-light text-white">${currentPrice?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div><div><p className="text-xs text-neutral-500 mb-1">Liquidation Price</p><p className="text-xl font-light text-orange-400">${tradeDetails.liquidationPrice?.toFixed(2)}</p></div></div><div className="grid grid-cols-2 gap-4"><div><p className="text-xs text-neutral-500 mb-1">Position Size</p><p className="text-xl font-light text-white">${tradeDetails.positionSizeDollars?.toFixed(2)}</p><p className="text-sm text-neutral-400">({tradeDetails.positionSize?.toFixed(6)} BTC)</p></div><div><p className="text-xs text-neutral-500 mb-1">Margin Required</p><p className="text-xl font-light text-white">${tradeDetails.marginRequired?.toFixed(2)}</p></div></div><div className="grid grid-cols-2 gap-4"><div><p className="text-xs text-neutral-500 mb-1">Risk/Reward Ratio</p><p className="text-xl font-light text-white">1:{tradeDetails.riskRewardRatio?.toFixed(2)}</p></div><div><div className="flex items-baseline gap-3 mb-1"><p className="text-xs text-neutral-500">Risk Amount ({riskPercentage}%)</p><button onClick={() => { const newRisk = prompt('Enter risk percentage (1-100):', String(riskPercentage)); if (newRisk !== null) { const parsed = parseFloat(newRisk); if (!Number.isNaN(parsed) && parsed > 0 && parsed <= 100) setRiskPercentage(parsed) } }} className="text-[10px] text-neutral-500 hover:text-white transition-colors underline">Adjust</button></div><p className="text-xl font-light text-white">${((portfolioQuery.data?.portfolio_size || 2000) * riskPercentage / 100).toFixed(2)}</p></div></div><div className="grid grid-cols-2 gap-4"><div><p className="text-xs text-neutral-500 mb-1">Estimated Loss (SL)</p><p className="text-xl font-light text-red-400">${tradeDetails.estimatedLoss?.toFixed(2)}</p></div><div><p className="text-xs text-neutral-500 mb-2">Estimated Profit</p>{tradeDetails.tpProfits && tradeDetails.tpProfits.length > 0 && <div className="space-y-1">{tradeDetails.tpProfits.map((tp) => (<p key={tp.index} className="text-sm text-green-400">TP {tp.index} (${tp.price.toLocaleString()}): ${tp.profit.toFixed(2)}</p>))}<p className="text-sm font-medium text-green-400 pt-1 border-t border-neutral-700">Total: ${tradeDetails.estimatedProfit?.toFixed(2)}</p></div>}</div></div></div></div>}
+      {tradeDetails && <div className="glass-panel p-6 shadow-2xl shadow-black/20 sticky top-8 self-stretch"><h3 className="text-sm font-medium text-neutral-400 mb-6">Trade Details</h3><div className="space-y-6"><div className="grid grid-cols-2 gap-4"><div><p className="text-xs text-neutral-500 mb-1">Entry Price</p><p className="text-xl font-light text-white">${currentPrice?.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p></div><div><p className="text-xs text-neutral-500 mb-1">Liquidation Price</p><p className="text-xl font-light text-orange-400">${tradeDetails.liquidationPrice?.toFixed(2)}</p></div></div><div className="grid grid-cols-2 gap-4"><div><p className="text-xs text-neutral-500 mb-1">Position Size</p><p className="text-xl font-light text-white">${tradeDetails.positionSizeDollars?.toFixed(2)}</p><p className="text-sm text-neutral-400">({tradeDetails.positionSize?.toFixed(6)} BTC)</p></div><div><p className="text-xs text-neutral-500 mb-1">Margin Required</p><p className="text-xl font-light text-white">${tradeDetails.marginRequired?.toFixed(2)}</p></div></div><div className="grid grid-cols-2 gap-4"><div><p className="text-xs text-neutral-500 mb-1">Risk/Reward Ratio</p><p className="text-xl font-light text-white">1:{tradeDetails.riskRewardRatio?.toFixed(2)}</p></div><div><div className="flex items-baseline gap-3 mb-1"><p className="text-xs text-neutral-500">Risk Amount ({riskPercentage}%)</p><button onClick={() => { const newRisk = prompt('Enter risk percentage (1-100):', String(riskPercentage)); if (newRisk !== null) { const parsed = parseFloat(newRisk); if (!Number.isNaN(parsed) && parsed > 0 && parsed <= 100) setRiskPercentage(parsed) } }} className="text-[10px] text-neutral-500 hover:text-white transition-colors underline">Adjust</button></div><p className="text-xl font-light text-white">${((portfolioQuery.data?.portfolio_size || 2000) * riskPercentage / 100).toFixed(2)}</p></div></div><div className="grid grid-cols-2 gap-4"><div><p className="text-xs text-neutral-500 mb-1">Estimated Loss (SL)</p><p className="text-xl font-light text-red-400">${tradeDetails.estimatedLoss?.toFixed(2)}</p></div><div><p className="text-xs text-neutral-500 mb-2">Estimated Profit</p>{tradeDetails.tpProfits && tradeDetails.tpProfits.length > 0 && <div className="space-y-1">{tradeDetails.tpProfits.map((tp) => (<p key={tp.index} className="text-sm text-green-400">TP {tp.index} (${tp.price.toLocaleString()}): ${tp.profit.toFixed(2)}</p>))}<p className="text-sm font-medium text-green-400 pt-1 border-t border-neutral-700">Total: ${tradeDetails.estimatedProfit?.toFixed(2)}</p></div>}</div></div></div></div>}
     </div>
   )
 }

@@ -55,12 +55,18 @@ body {
 }
 
 /* Ensure inputs are interactive */
-input, textarea, select, button {
+input,
+textarea,
+select,
+button {
   pointer-events: auto !important;
   user-select: text;
 }
 
-input[type="number"], input[type="text"], input[type="email"], textarea {
+input[type="number"],
+input[type="text"],
+input[type="email"],
+textarea {
   -webkit-user-select: text;
   -moz-user-select: text;
   user-select: text;
@@ -92,7 +98,7 @@ input[type="number"] {
 /* Modern Trading Background - Topographic Style */
 .topography-bg {
   position: relative;
-  background: 
+  background:
     /* Subtle radial glow from center */
     radial-gradient(ellipse 100% 100% at 50% 50%, rgba(16, 185, 129, 0.03) 0%, transparent 60%),
     /* Corner accents */
@@ -108,7 +114,7 @@ input[type="number"] {
   content: '';
   position: absolute;
   inset: 0;
-  background: 
+  background:
     /* Wavy contour lines - flowing terrain curves */
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0,150 Q150,100 300,150 T600,140 T900,160 T1200,150' fill='none' stroke='rgba(16, 185, 129, 0.07)' stroke-width='1.5'/%3E%3Cpath d='M0,200 Q200,140 400,200 T800,200 T1200,200' fill='none' stroke='rgba(16, 185, 129, 0.08)' stroke-width='1.5'/%3E%3Cpath d='M0,400 Q250,340 500,400 T1000,380 T1400,400' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1'/%3E%3Cpath d='M0,500 Q300,420 600,500 T1200,480' fill='none' stroke='rgba(16, 185, 129, 0.07)' stroke-width='1.5'/%3E%3Cpath d='M0,700 Q400,620 800,700 T1400,680' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1'/%3E%3C/svg%3E"),
     /* Diagonal flowing waves */
@@ -125,7 +131,7 @@ input[type="number"] {
   content: '';
   position: absolute;
   inset: 0;
-  background: 
+  background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0,100 Q300,50 600,100 T1200,90' fill='none' stroke='rgba(16, 185, 129, 0.04)' stroke-width='1'/%3E%3Cpath d='M0,800 Q400,750 800,800' fill='none' stroke='rgba(16, 185, 129, 0.04)' stroke-width='1'/%3E%3C/svg%3E"),
     /* Fine texture overlay */
     radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.008) 1px, transparent 0);
@@ -180,7 +186,9 @@ input[type="number"] {
 }
 
 /* Input Focus Enhancements */
-input:focus, textarea:focus, select:focus {
+input:focus,
+textarea:focus,
+select:focus {
   box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
   border-color: rgba(16, 185, 129, 0.5);
 }
@@ -359,3 +367,30 @@ input:focus, textarea:focus, select:focus {
   border-radius: 4px;
 }
 
+/* Glass Panel Utility */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.003);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+}
+
+/* Glass Card Variant - for smaller elements */
+.glass-card {
+  background: rgba(255, 255, 255, 0.003);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+@keyframes strobe-text {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-strobe-text {
+  display: inline-block;
+  animation: strobe-text 8s ease-in-out infinite;
+}
