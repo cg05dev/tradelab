@@ -20,6 +20,7 @@ export default function PortfolioHeader() {
   const analyticsQuery = useQuery<AnalyticsOverview>({
     queryKey: ['analytics-overview', mode],
     queryFn: async () => (await getAnalyticsOverview(mode)).data ?? { total_pnl: 0, win_rate: 0, profit_factor: 0 },
+    refetchInterval: 3000, // Refresh analytics every 3 seconds
   })
 
   const openTradesQuery = useQuery<{ trades: Trade[] }>({

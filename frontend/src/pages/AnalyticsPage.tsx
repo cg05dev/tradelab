@@ -23,19 +23,19 @@ export default function AnalyticsPage() {
   const [search, setSearch] = useState('')
   const [sort, setSort] = useState('date_desc')
   const [page, setPage] = useState(1)
-  const limit = 10
+  const [pageSize, setPageSize] = useState(5)
 
   const metricsQuery = useQuery({ queryKey: ['analytics-metrics', timeframe, mode], queryFn: async () => (await getAnalyticsMetrics(timeframe, mode)).data })
   const seriesQuery = useQuery({ queryKey: ['analytics-pnl-series', timeframe, mode], queryFn: async () => (await getPnlSeries(timeframe, mode)).data ?? [] })
   const countQuery = useQuery({ queryKey: ['closed-trades-count', mode], queryFn: async () => (await getClosedTradesCount(mode)).data?.count ?? 0 })
   const tradesQuery = useQuery({
-    queryKey: ['closed-trades', { timeframe, asset, search, sort, page, limit, mode }],
-    queryFn: async () => (await getClosedTrades({ asset: asset || undefined, search: search || undefined, sort, page, limit, mode })).data ?? { trades: [] },
+    queryKey: ['closed-trades', { timeframe, asset, search, sort, page, limit: pageSize, mode }],
+    queryFn: async () => (await getClosedTrades({ asset: asset || undefined, search: search || undefined, sort, page, limit: pageSize, mode })).data ?? { trades: [] },
   })
 
   const trades = (tradesQuery.data?.trades ?? []) as Trade[]
   const totalCount = countQuery.data ?? tradesQuery.data?.count ?? 0
-  const totalPages = Math.max(1, Math.ceil(totalCount / limit))
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
 
   const assets = useMemo(() => {
     const values = new Set<string>()
@@ -53,8 +53,8 @@ export default function AnalyticsPage() {
   }, [seriesQuery.data])
 
   return (
-    <div className="space-y-6">
-      <section className={`${mode === 'paper' ? 'glass-panel' : 'glass-panel-live'} p-6 shadow-2xl shadow-black/20 space-y-6`}>
+    <div className="space-y-4">
+      <section className={`${mode === 'paper' ? 'glass-panel' : 'glass-panel-live'} p-5 shadow-2xl shadow-black/20 space-y-4`}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h2 className="text-lg font-semibold text-white font-display">Performance Overview</h2>
@@ -72,7 +72,7 @@ export default function AnalyticsPage() {
           <MetricCard label="Avg Win" value={metricsQuery.data?.avg_win ?? 0} showCurrency mode={mode} />
           <MetricCard label="Avg Loss" value={metricsQuery.data?.avg_loss ?? 0} showCurrency isLoss mode={mode} />
         </div>
-        <div className="h-80">
+        <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={seriesQuery.data ?? []}>
               <defs>
@@ -91,12 +91,27 @@ export default function AnalyticsPage() {
         </div>
       </section>
 
-      <section className={`${mode === 'paper' ? 'glass-panel' : 'glass-panel-live'} p-6 shadow-2xl shadow-black/20 space-y-4`}>
+      <section className={`${mode === 'paper' ? 'glass-panel' : 'glass-panel-live'} p-5 shadow-2xl shadow-black/20 space-y-3`}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <h2 className="text-lg font-semibold text-white font-display">Trade History</h2>
-          <div className="text-sm text-neutral-400">{totalCount} total trades</div>
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-neutral-400">
+              <span>Show:</span>
+              <select 
+                value={pageSize} 
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}
+                className="bg-black border border-neutral-700 rounded px-2 py-1 text-xs text-white outline-none"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+            </label>
+            <div className="text-sm text-neutral-400">{totalCount} total trades</div>
+          </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-2">
           <label className="rounded-lg bg-black border border-neutral-700 px-3 py-2 text-sm text-white flex items-center gap-2">
             <span className="text-neutral-500 text-xs uppercase tracking-wide">Asset</span>
             <select value={asset} onChange={(e) => { setAsset(e.target.value); setPage(1) }} className="w-full bg-transparent outline-none"><option value="">All Assets</option>{assets.map((a) => <option key={a} value={a}>{a}</option>)}</select>
@@ -114,7 +129,7 @@ export default function AnalyticsPage() {
             <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} placeholder="Search trades" className="w-full bg-transparent outline-none placeholder-neutral-500" />
           </label>
         </div>
-        <div className="space-y-3">
+        <div className="space-y-2">
           {trades.length === 0 ? <div className="rounded-lg border border-dashed border-neutral-700 p-6 text-sm text-neutral-500 text-center">No trades match the selected filters.</div> : trades.map((trade, index) => {
             const pnl = trade['P&L'] ?? 0
             const isLong = trade.Direction?.toUpperCase() === 'LONG'
@@ -125,7 +140,7 @@ export default function AnalyticsPage() {
             const leverage = trade.Leverage
 
             return (
-              <div key={`${trade._index ?? index}`} className={`${mode === 'paper' ? 'glass-card' : 'glass-card-live'} p-4 flex items-center justify-between gap-4`}>
+              <div key={`${trade._index ?? index}`} className={`${mode === 'paper' ? 'glass-card' : 'glass-card-live'} p-3 flex items-center justify-between gap-4`}>
                 {/* Left: Ticker + Badge + Date */}
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="flex items-center gap-2">
@@ -164,7 +179,7 @@ export default function AnalyticsPage() {
             )
           })}
         </div>
-        {totalCount > limit && (
+        {totalCount > pageSize && (
           <div className="flex items-center justify-between">
             <button disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))} className="inline-flex items-center gap-2 rounded-lg border border-neutral-700 px-3 py-2 text-sm text-neutral-300 disabled:opacity-40"><ChevronLeft className="h-4 w-4" /> Previous</button>
             <div className="text-sm text-neutral-400">Page {page} of {totalPages}</div>
