@@ -392,5 +392,5 @@ select:focus {
 
 .animate-strobe-text {
   display: inline-block;
-  animation: strobe-text 8s ease-in-out infinite;
+  animation: strobe-text 3s ease-in-out infinite;
 }

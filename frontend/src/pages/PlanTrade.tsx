@@ -126,9 +126,9 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
           onClick={() => executeMutation.mutate()}
           disabled={executeMutation.isPending}
           className={`w-full py-3 rounded-xl text-sm font-semibold glass-panel transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed border 
-            ${mode === 'paper' ? 'border-purple-500/30 text-purple-500 shadow-[0_0_8px_rgba(157,0,255,0.1)] hover:shadow-[0_0_12px_rgba(157,0,255,0.2)]' : 
-              direction === 'short' ? 'border-red-500/30 text-red-500 shadow-[0_0_8px_rgba(255,51,51,0.1)] hover:shadow-[0_0_12px_rgba(255,51,51,0.2)]' : 
-              'border-green-400/30 text-green-400 shadow-[0_0_8px_rgba(0,255,102,0.1)] hover:shadow-[0_0_12px_rgba(0,255,102,0.2)]'
+            ${mode === 'paper' ? 'border-purple-500/30 text-purple-500 shadow-[0_0_20px_rgba(157,0,255,0.2)] hover:shadow-[0_0_30px_rgba(157,0,255,0.4)]' : 
+              direction === 'short' ? 'border-red-500/30 text-red-500 shadow-[0_0_20px_rgba(255,51,51,0.2)] hover:shadow-[0_0_30px_rgba(255,51,51,0.4)]' : 
+              'border-green-400/30 text-green-400 shadow-[0_0_20px_rgba(0,255,102,0.2)] hover:shadow-[0_0_30px_rgba(0,255,102,0.4)]'
             }`}
         >
           {executeMutation.isPending ? 'Executing...' : 'Execute Trade'.split('').map((char, i) => (
