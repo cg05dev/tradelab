@@ -2,17 +2,20 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { getPortfolio, updatePortfolio } from '../api/portfolio'
 import { getAnalyticsOverview } from '../api/analytics'
 import { getErrorMessage } from '../api/error'
+import { useMode } from '../contexts/ModeContext'
 import type { AnalyticsOverview, PortfolioResponse } from '../types'
 
 export default function PortfolioHeader() {
+  const { mode } = useMode()
+
   const portfolioQuery = useQuery<PortfolioResponse>({
-    queryKey: ['portfolio'],
-    queryFn: async () => (await getPortfolio()).data ?? { portfolio_size: 0 },
+    queryKey: ['portfolio', mode],
+    queryFn: async () => (await getPortfolio(mode)).data ?? { portfolio_size: 0 },
   })
 
   const analyticsQuery = useQuery<AnalyticsOverview>({
-    queryKey: ['analytics-overview'],
-    queryFn: async () => (await getAnalyticsOverview()).data ?? { total_pnl: 0, win_rate: 0, profit_factor: 0 },
+    queryKey: ['analytics-overview', mode],
+    queryFn: async () => (await getAnalyticsOverview(mode)).data ?? { total_pnl: 0, win_rate: 0, profit_factor: 0 },
   })
 
   const updateMutation = useMutation({
