@@ -126,9 +126,9 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
           onClick={() => executeMutation.mutate()}
           disabled={executeMutation.isPending}
           className={`w-full py-3 rounded-xl text-sm font-semibold glass-panel transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed border 
-            ${mode === 'paper' ? 'border-purple-500/30 text-purple-500 shadow-[0_0_20px_rgba(157,0,255,0.2)] hover:shadow-[0_0_30px_rgba(157,0,255,0.4)]' : 
-              direction === 'short' ? 'border-red-500/30 text-red-500 shadow-[0_0_20px_rgba(255,51,51,0.2)] hover:shadow-[0_0_30px_rgba(255,51,51,0.4)]' : 
-              'border-green-400/30 text-green-400 shadow-[0_0_20px_rgba(0,255,102,0.2)] hover:shadow-[0_0_30px_rgba(0,255,102,0.4)]'
+            ${mode === 'paper' ? 'border-indigo-400/30 text-indigo-400 shadow-[0_10px_20px_-10px_rgba(129,140,248,0.3)] hover:shadow-[0_15px_25px_-10px_rgba(129,140,248,0.5)]' : 
+              direction === 'short' ? 'border-red-400/30 text-red-400 shadow-[0_10px_20px_-10px_rgba(248,113,113,0.3)] hover:shadow-[0_15px_25px_-10px_rgba(248,113,113,0.5)]' : 
+              'border-green-400/30 text-green-400 shadow-[0_10px_20px_-10px_rgba(74,222,128,0.3)] hover:shadow-[0_15px_25px_-10px_rgba(74,222,128,0.5)]'
             }`}
         >
           {executeMutation.isPending ? 'Executing...' : 'Execute Trade'.split('').map((char, i) => (
@@ -136,8 +136,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
               key={i}
               className="inline-block animate-strobe-text"
               style={{
-                animationDelay: `${i * 0.1}s`,
-                color: mode === 'paper' ? '#9D00FF' : direction === 'short' ? '#FF3333' : '#00FF66'
+                animationDelay: `${i * 0.1}s`
               }}
             >
               {char === ' ' ? '\u00A0' : char}
