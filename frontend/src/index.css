@@ -95,8 +95,8 @@ input[type="number"] {
   color: #ffffff;
 }
 
-/* Modern Trading Background - Topographic Style */
-.topography-bg {
+/* Modern Trading Background - Paper Mode (Space Silver) */
+.topography-bg-paper {
   position: relative;
   background:
     /* Subtle radial glow from center */
@@ -109,8 +109,7 @@ input[type="number"] {
   background-attachment: fixed;
 }
 
-/* Wavy Topographic contour lines - organic wave patterns */
-.topography-bg::before {
+.topography-bg-paper::before {
   content: '';
   position: absolute;
   inset: 0;
@@ -124,10 +123,10 @@ input[type="number"] {
   background-size: 100% 100%;
   pointer-events: none;
   opacity: 0.9;
+  transition: opacity 1s ease;
 }
 
-/* Secondary layer - subtle organic lines */
-.topography-bg::after {
+.topography-bg-paper::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -138,6 +137,52 @@ input[type="number"] {
   background-size: 100% 100%, 30px 30px;
   pointer-events: none;
   opacity: 0.85;
+  transition: opacity 1s ease;
+}
+
+/* Modern Trading Background - Live Mode (Green) */
+.topography-bg-live {
+  position: relative;
+  background:
+    /* Subtle radial glow from center */
+    radial-gradient(ellipse 100% 100% at 50% 50%, rgba(16, 185, 129, 0.04) 0%, transparent 60%),
+    /* Corner accents */
+    radial-gradient(ellipse 40% 40% at 0% 0%, rgba(16, 185, 129, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse 40% 40% at 100% 100%, rgba(16, 185, 129, 0.03) 0%, transparent 50%),
+    /* Base gradient */
+    linear-gradient(135deg, #121214 0%, #18181b 25%, #121214 50%, #151518 75%, #121214 100%);
+  background-attachment: fixed;
+}
+
+.topography-bg-live::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    /* Wavy contour lines - flowing terrain curves */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0,150 Q150,100 300,150 T600,140 T900,160 T1200,150' fill='none' stroke='rgba(16, 185, 129, 0.07)' stroke-width='1.5'/%3E%3Cpath d='M0,200 Q200,140 400,200 T800,200 T1200,200' fill='none' stroke='rgba(16, 185, 129, 0.08)' stroke-width='1.5'/%3E%3Cpath d='M0,400 Q250,340 500,400 T1000,380 T1400,400' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1'/%3E%3Cpath d='M0,500 Q300,420 600,500 T1200,480' fill='none' stroke='rgba(16, 185, 129, 0.07)' stroke-width='1.5'/%3E%3Cpath d='M0,700 Q400,620 800,700 T1400,680' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1'/%3E%3C/svg%3E"),
+    /* Diagonal flowing waves */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M200,0 Q280,300 200,600 T250,1000' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1.5'/%3E%3Cpath d='M600,0 Q520,250 600,500 T550,1000' fill='none' stroke='rgba(16, 185, 129, 0.05)' stroke-width='1'/%3E%3Cpath d='M800,0 Q720,250 800,500 T750,1000' fill='none' stroke='rgba(16, 185, 129, 0.05)' stroke-width='1'/%3E%3C/svg%3E"),
+    /* Organic terrain curves */
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0,300 C250,240 500,360 750,300 S1200,260 1400,300' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1.5'/%3E%3Cpath d='M0,350 C300,280 600,420 900,350 S1200,300 1400,350' fill='none' stroke='rgba(16, 185, 129, 0.07)' stroke-width='1.5'/%3E%3Cpath d='M0,600 C200,540 500,660 800,600 S1200,560 1400,600' fill='none' stroke='rgba(16, 185, 129, 0.06)' stroke-width='1'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+  pointer-events: none;
+  opacity: 0.9;
+  transition: opacity 1s ease;
+}
+
+.topography-bg-live::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1200 800' preserveAspectRatio='none'%3E%3Cpath d='M0,100 Q300,50 600,100 T1200,90' fill='none' stroke='rgba(16, 185, 129, 0.04)' stroke-width='1'/%3E%3Cpath d='M0,800 Q400,750 800,800' fill='none' stroke='rgba(16, 185, 129, 0.04)' stroke-width='1'/%3E%3C/svg%3E"),
+    /* Fine texture overlay */
+    radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.008) 1px, transparent 0);
+  background-size: 100% 100%, 30px 30px;
+  pointer-events: none;
+  opacity: 0.85;
+  transition: opacity 1s ease;
 }
 
 /* Card Enhancements */
@@ -374,10 +419,24 @@ select:focus {
   border-radius: 16px;
 }
 
+/* Glass Panel - Live Mode (Warm Charcoal) */
+.glass-panel-live {
+  background: #1c1c1e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+}
+
 /* Glass Card Variant - for smaller elements */
 .glass-card {
   background: #0f0f12;
   border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+/* Glass Card - Live Mode (Warm Charcoal) */
+.glass-card-live {
+  background: #1c1c1e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
 }
 

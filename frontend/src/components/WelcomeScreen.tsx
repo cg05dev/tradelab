@@ -25,7 +25,7 @@ export default function WelcomeScreen({ onComplete }: { onComplete: () => void }
   })
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-black topography-bg">
+    <div className="min-h-screen flex items-center justify-center p-6 bg-black topography-bg-paper">
       <div className="max-w-md w-full">
         <div className="border border-gray-700/60 rounded-xl p-8 bg-black/50 backdrop-blur-sm text-center" style={{ boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2)' }}>
           <div className="flex justify-center mb-5">
