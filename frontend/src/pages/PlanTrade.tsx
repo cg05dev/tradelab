@@ -108,7 +108,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
           <form onSubmit={(e) => e.preventDefault()} className="space-y-8">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-medium text-white">BTC-USDC</h3>
+                <h3 className="text-sm font-medium text-white font-display">BTC-USDC</h3>
                 <p className="text-xs text-neutral-400">Perpetual</p>
               </div>
               <div className="flex gap-1">

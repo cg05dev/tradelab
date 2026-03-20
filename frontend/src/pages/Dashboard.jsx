@@ -107,7 +107,7 @@ export default function Dashboard() {
         {/* Portfolio Summary */}
         <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-4 shadow-2xl shadow-black/20 w-full">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-medium text-white">Portfolio</h2>
+            <h2 className="text-lg font-medium text-white font-display">Portfolio</h2>
             <button
               onClick={() => setShowDetails(true)}
               className="text-xs text-neutral-400 hover:text-white transition-colors px-3 py-1 border border-neutral-700 rounded hover:border-neutral-500"

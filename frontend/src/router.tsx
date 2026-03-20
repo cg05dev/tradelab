@@ -37,7 +37,7 @@ function RouterLayout() {
       <Layout>
         <div className="max-w-7xl mx-auto px-6 py-6 space-y-6 relative">
           <div className="absolute top-6 left-6 z-10">
-            <h1 className="text-lg font-medium text-white tracking-tight">TradeLab</h1>
+            <h1 className="text-lg font-medium text-white tracking-tight font-display">TradeLab</h1>
           </div>
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <PortfolioHeader />

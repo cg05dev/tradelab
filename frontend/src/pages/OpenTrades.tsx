@@ -670,7 +670,7 @@ function TradeDetailModal({ trade, currentPrice, onClose }: TradeDetailModalProp
           {/* Header */}
           <div className="flex items-center justify-between mb-5 pb-3 border-b border-neutral-700/50">
             <div className="flex items-center gap-2.5">
-              <h2 className="text-lg font-medium text-white">{trade.Asset}</h2>
+              <h2 className="text-lg font-medium text-white font-display">{trade.Asset}</h2>
               <span className={`px-2 py-0.5 text-xs rounded ${
                 trade.Direction?.toLowerCase() === 'long'
                   ? 'bg-green-500/10 text-green-400 border border-green-500/30'

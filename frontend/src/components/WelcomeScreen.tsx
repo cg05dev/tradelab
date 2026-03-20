@@ -34,7 +34,7 @@ export default function WelcomeScreen({ onComplete }: { onComplete: () => void }
             </div>
           </div>
 
-          <h1 className="text-xl font-semibold text-white mb-1.5">Welcome to TradeLab</h1>
+          <h1 className="text-xl font-semibold text-white mb-1.5 font-display">Welcome to TradeLab</h1>
           <p className="text-gray-400 text-xs mb-6">Set up your portfolio to get started</p>
 
           <form

@@ -57,7 +57,7 @@ export default function AnalyticsPage() {
       <section className={`${mode === 'paper' ? 'glass-panel' : 'glass-panel-live'} p-6 shadow-2xl shadow-black/20 space-y-6`}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
-            <h2 className="text-lg font-semibold text-white">Performance Overview</h2>
+            <h2 className="text-lg font-semibold text-white font-display">Performance Overview</h2>
             <p className="text-sm text-neutral-400">View key metrics and cumulative P&amp;L by timeframe.</p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -93,7 +93,7 @@ export default function AnalyticsPage() {
 
       <section className={`${mode === 'paper' ? 'glass-panel' : 'glass-panel-live'} p-6 shadow-2xl shadow-black/20 space-y-4`}>
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <h2 className="text-lg font-semibold text-white">Trade History</h2>
+          <h2 className="text-lg font-semibold text-white font-display">Trade History</h2>
           <div className="text-sm text-neutral-400">{totalCount} total trades</div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
