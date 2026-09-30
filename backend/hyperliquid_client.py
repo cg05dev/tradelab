@@ -127,35 +127,23 @@ class HyperliquidClient:
         return self._exchange_client
     
     def get_current_price(self, coin: str = "BTC") -> Optional[float]:
-        """Get current price for a coin via REST API"""
-        self._ensure_initialized()
-        
-        if not self._info_client:
-            return None
-        
+        """Get the current mid price from Hyperliquid's public REST API."""
         try:
-            all_mids = self._info_client.all_mids()
-            
-            # Handle case where all_mids returns an error or empty response
-            if not all_mids:
+            base_url = constants.TESTNET_API_URL if self._use_testnet else constants.MAINNET_API_URL
+            response = requests.post(
+                f"{base_url}/info",
+                json={"type": "allMids"},
+                timeout=10,
+            )
+            response.raise_for_status()
+            all_mids = response.json()
+
+            if not isinstance(all_mids, dict):
+                print(f"[ERROR] Unexpected response format from Hyperliquid API: {type(all_mids)}")
                 return None
-            
-            # Handle dict format: {"BTC": "45000.5", "ETH": "3200.1", ...}
-            if isinstance(all_mids, dict):
-                price = all_mids.get(coin)
-                if price:
-                    return float(price)
-                return None
-            
-            # Handle list format (legacy): [{"coin": "BTC", "mid": "45000.5"}, ...]
-            if isinstance(all_mids, list):
-                for mid in all_mids:
-                    if isinstance(mid, dict) and mid.get('coin') == coin:
-                        return float(mid.get('mid', 0))
-                return None
-            
-            print(f"[ERROR] Unexpected response format from Hyperliquid API: {type(all_mids)}")
-            return None
+
+            price = all_mids.get(coin.upper())
+            return float(price) if price is not None else None
         except Exception as e:
             print(f"[ERROR] Error getting price for {coin}: {e}")
             return None

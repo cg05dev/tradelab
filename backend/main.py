@@ -461,7 +461,24 @@ def get_analytics_metrics(timeframe: str = 'all', mode: Optional[str] = None):
         win_rate = float(len(wins) / len(pnl_series) * 100) if len(pnl_series) else 0
         avg_win = float(wins.mean()) if len(wins) else 0
         avg_loss = float(losses.mean()) if len(losses) else 0
-        return {"total_pnl": total_pnl, "win_rate": win_rate, "avg_win": avg_win, "avg_loss": avg_loss}
+        gross_profit = float(wins.sum()) if len(wins) else 0
+        gross_loss = abs(float(losses.sum())) if len(losses) else 0
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else None
+        cumulative_pnl = pnl_series.cumsum()
+        running_peak = cumulative_pnl.cummax().clip(lower=0)
+        drawdown = cumulative_pnl - running_peak
+        max_drawdown = abs(float(drawdown.min())) if len(drawdown) else 0
+        return {
+            "total_pnl": total_pnl,
+            "win_rate": win_rate,
+            "avg_win": avg_win,
+            "avg_loss": avg_loss,
+            "profit_factor": profit_factor,
+            "max_drawdown": max_drawdown,
+            "trade_count": int(len(pnl_series)),
+            "win_count": int(len(wins)),
+            "loss_count": int(len(losses)),
+        }
     except Exception as e:
         print(f"Error in get_analytics_metrics: {e}")
         traceback.print_exc()
@@ -485,7 +502,12 @@ def get_pnl_series(timeframe: str = 'all', mode: Optional[str] = None):
         closed['P&L'] = pd.to_numeric(closed['P&L'], errors='coerce').fillna(0)
         closed['cumulative_pnl'] = closed['P&L'].cumsum()
         return [
-            {'date': row['Date'].strftime('%Y-%m-%d') if pd.notna(row['Date']) else None, 'cumulative_pnl': float(row['cumulative_pnl'])}
+            {
+                'date': row['Date'].isoformat() if pd.notna(row['Date']) else None,
+                'asset': row.get('Asset'),
+                'pnl': float(row['P&L']),
+                'cumulative_pnl': float(row['cumulative_pnl']),
+            }
             for _, row in closed.iterrows()
         ]
     except Exception as e:
@@ -1267,8 +1289,8 @@ def get_hyperliquid_status():
 @app.get("/api/hyperliquid/price/{coin}")
 def get_hyperliquid_price(coin: str):
     """Get current price for a coin"""
-    if not hl_client or not hl_client.enabled:
-        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
+    if not hl_client:
+        raise HTTPException(status_code=503, detail="Hyperliquid client not available")
     
     price = hl_client.get_current_price(coin.upper())
     if price is None:
@@ -1695,6 +1717,94 @@ def close_hyperliquid_position(coin: str):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error closing position: {str(e)}")
 
+class WebhookTrade(BaseModel):
+    action: str = "add_trade"
+    asset: str = "BTC"
+    direction: str = "long"
+    entry: float = 0
+    sl: float = 0
+    leverage: int = 10
+    risk_pct: float = 2.0
+    portfolio_size: Optional[float] = None
+    tp1: float = 0
+    tp1_alloc: float = 50
+    tp2: float = 0
+    tp2_alloc: float = 30
+    tp3: float = 0
+    tp3_alloc: float = 20
+    tp4: float = 0
+    tp4_alloc: float = 0
+    mode: str = "paper"
+
+
+@app.post("/api/webhook/trade")
+async def webhook_trade(data: WebhookTrade):
+    """Receive trade plans from TradingView alerts via webhook."""
+    try:
+        from tradelab import core
+
+        direction = data.direction.lower().strip()
+        if direction not in ["long", "short"]:
+            direction = "long"
+
+        mode = data.mode if data.mode in ["paper", "live"] else "paper"
+
+        if data.portfolio_size and data.portfolio_size > 0:
+            core.save_portfolio_size(data.portfolio_size, mode)
+
+        tps = []
+        if data.tp1 > 0:
+            tps.append({"price": data.tp1, "allocation": data.tp1_alloc / 100.0})
+        if data.tp2 > 0:
+            tps.append({"price": data.tp2, "allocation": data.tp2_alloc / 100.0})
+        if data.tp3 > 0:
+            tps.append({"price": data.tp3, "allocation": data.tp3_alloc / 100.0})
+        if data.tp4 > 0:
+            tps.append({"price": data.tp4, "allocation": data.tp4_alloc / 100.0})
+
+        sls = []
+        if data.sl > 0:
+            sls.append({"price": data.sl, "allocation": 1.0})
+
+        portfolio = core.load_portfolio_size(mode)
+        if portfolio <= 0:
+            portfolio = data.portfolio_size if data.portfolio_size else 200.0
+            core.save_portfolio_size(portfolio, mode)
+
+        risk_pct = data.risk_pct if data.risk_pct > 0 else 2.0
+        pos_result = core.calculate_position_size(data.entry, data.sl, data.leverage, direction, risk_pct, mode)
+        position_size = pos_result.get("position_size_dollars", 0)
+        margin = pos_result.get("margin_required", 0)
+
+        result = core.add_trade(
+            asset=data.asset,
+            direction=direction,
+            entry_price=data.entry,
+            stop_loss=data.sl if data.sl > 0 else 0,
+            position_size=position_size,
+            take_profits=tps,
+            stop_losses=sls,
+            margin=margin,
+            leverage=data.leverage,
+            mode=mode,
+        )
+
+        return {
+            "status": "success",
+            "message": f"Trade saved: {data.asset} {direction} @ ${data.entry:,.2f}",
+            "position_size": position_size,
+            "margin_required": margin,
+            "risk_amount": pos_result.get("risk_amount", 0),
+            "rr_ratio": pos_result.get("rr_ratio", 0) if data.sl > 0 else 0,
+            "liquidation_price": pos_result.get("liquidation_price", 0),
+            "trade_index": result.get("trade_index"),
+        }
+    except Exception as e:
+        print(f"[ERROR] Webhook trade error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     # Optimize for faster startup - use single worker, disable access log
@@ -1705,4 +1815,3 @@ if __name__ == "__main__":
         log_level="warning",  # Reduce logging overhead
         access_log=False  # Disable access logs for faster startup
     )
-
