@@ -10,10 +10,13 @@ export default function TradePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <PlanTrade onTradeAdded={handleTradeAdded} />
-      <div className="border border-neutral-700/30 rounded-xl bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm p-6 shadow-2xl shadow-black/20">
-        <h2 className="text-sm font-medium text-neutral-400 mb-4">Open Trades</h2>
+      <div className="rounded-xl border border-neutral-700/30 bg-gradient-to-b from-neutral-900/20 to-black/20 p-6 shadow-2xl shadow-black/20 backdrop-blur-sm md:p-7">
+        <div className="mb-4">
+          <h2 className="font-display text-base font-semibold text-white">Open trades</h2>
+          <p className="mt-1 text-xs text-neutral-500">Live position performance and risk levels.</p>
+        </div>
         <OpenTrades ref={openTradesRef} />
       </div>
     </div>

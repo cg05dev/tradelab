@@ -8,22 +8,23 @@ export default function ModeToggle() {
       type="button"
       onClick={toggleMode}
       disabled={isLoading}
-      className="inline-flex items-stretch overflow-hidden rounded-full border border-neutral-700/30 bg-gradient-to-b from-neutral-900/20 to-black/20 backdrop-blur-sm disabled:opacity-50"
+      className="inline-flex items-stretch overflow-hidden rounded-full border border-neutral-700/50 bg-black/30 p-1 backdrop-blur-sm disabled:opacity-50"
       aria-label="Toggle trading mode"
+      aria-pressed={mode === 'live'}
     >
       <span
-        className={`px-3 py-1 text-xs font-semibold transition-colors border-r border-neutral-700/30 ${
+        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
           mode === 'paper'
-            ? 'text-indigo-400'
+            ? 'bg-indigo-400/10 text-indigo-300'
             : 'text-neutral-500'
         }`}
       >
         Paper
       </span>
       <span
-        className={`px-3 py-1 text-xs font-semibold transition-colors ${
+        className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
           mode === 'live'
-            ? 'text-green-400'
+            ? 'bg-green-400/10 text-green-400'
             : 'text-neutral-500'
         }`}
       >

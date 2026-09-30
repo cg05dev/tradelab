@@ -310,8 +310,9 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
   return (
     <div className="w-full">
       {trades.length === 0 ? (
-        <div className="text-center py-8 text-neutral-500 text-sm">
-          No open trades
+        <div className="rounded-lg border border-dashed border-white/[0.08] px-5 py-6 text-center">
+          <p className="text-sm font-medium text-neutral-300">No open {mode} trades</p>
+          <p className="mt-1 text-xs text-neutral-500">Active positions and their unrealized P&amp;L will appear here.</p>
         </div>
       ) : (
         <div className={`grid gap-4 ${

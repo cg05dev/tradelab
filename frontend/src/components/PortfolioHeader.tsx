@@ -125,11 +125,12 @@ export default function PortfolioHeader() {
   const portfolioWithUnrealized = portfolioSize + totalUnrealizedPnL
 
   return (
-    <div className="w-full py-6">
-      <div className="flex items-center gap-4">
+    <div className="w-full rounded-xl border border-white/[0.06] bg-black/10 px-5 py-4 backdrop-blur-sm">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
         <button
           onClick={handleUpdatePortfolio}
-          className="text-xl font-light text-white border border-transparent rounded-md px-2 py-1 -mx-2 -my-1 hover:text-neutral-200 hover:border-neutral-700 hover:bg-white/[0.03] hover:underline underline-offset-4 transition-colors cursor-pointer focus:outline-none focus-visible:border-green-500/50 focus-visible:bg-green-500/5"
+          className="rounded-md border border-transparent px-2 py-1 -mx-2 -my-1 font-display text-2xl font-medium tabular-nums text-white hover:border-neutral-700 hover:bg-white/[0.03] hover:text-neutral-200 focus:outline-none focus-visible:border-green-500/50 focus-visible:bg-green-500/5"
+          title="Edit portfolio size"
         >
           ${portfolioWithUnrealized.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </button>
@@ -140,23 +141,20 @@ export default function PortfolioHeader() {
           </span>
         )}
 
-        <div className="flex items-center gap-1 text-xs text-neutral-400">
-          <span className="text-neutral-600">|</span>
-          <div className="flex items-center gap-1 px-1.5">
-            <span className="text-neutral-500">WR</span>
-            <span className="text-neutral-300">{winRate.toFixed(0)}%</span>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-400">
+          <div className="rounded-md border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5" title="Percentage of closed trades that were profitable">
+            <span className="mr-1.5 text-neutral-500">Win rate</span>
+            <span className="tabular-nums text-neutral-200">{winRate.toFixed(0)}%</span>
           </div>
-          <span className="text-neutral-600">|</span>
-          <div className="flex items-center gap-1 px-1.5">
-            <span className="text-neutral-500">P&L</span>
-            <span className={totalPnL >= 0 ? 'text-green-400/70' : 'text-red-400/70'}>
+          <div className="rounded-md border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5" title="Realized profit and loss">
+            <span className="mr-1.5 text-neutral-500">Realized P&amp;L</span>
+            <span className={`tabular-nums ${totalPnL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {totalPnL >= 0 ? '+' : ''}${totalPnL.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </span>
           </div>
-          <span className="text-neutral-600">|</span>
-          <div className="flex items-center gap-1 px-1.5">
-            <span className="text-neutral-500">PF</span>
-            <span className="text-neutral-300">{profitFactor.toFixed(1)}</span>
+          <div className="rounded-md border border-white/[0.06] bg-white/[0.02] px-2.5 py-1.5" title="Gross profits divided by gross losses">
+            <span className="mr-1.5 text-neutral-500">Profit factor</span>
+            <span className="tabular-nums text-neutral-200">{profitFactor > 0 ? profitFactor.toFixed(1) : '—'}</span>
           </div>
         </div>
       </div>

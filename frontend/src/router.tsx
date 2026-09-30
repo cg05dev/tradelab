@@ -16,18 +16,18 @@ function PrimaryNav() {
   ] as const
 
   return (
-    <div className="flex flex-wrap gap-2 text-xs text-neutral-400">
+    <nav className="flex flex-wrap gap-2 text-sm text-neutral-400" aria-label="Primary navigation">
       {navItems.map((item) => (
         <Link
           key={item.to}
           to={item.to}
-          className="rounded-full border border-neutral-700 px-3 py-1 transition-colors hover:border-neutral-500 hover:text-white data-[status=active]:border-white data-[status=active]:text-white"
-          activeProps={{ className: 'rounded-full border border-white px-3 py-1 text-white' }}
+          className="rounded-full border border-neutral-700 px-4 py-1.5 transition-colors hover:border-neutral-500 hover:text-white data-[status=active]:border-white data-[status=active]:text-white"
+          activeProps={{ className: 'rounded-full border border-white px-4 py-1.5 text-white' }}
         >
           {item.label}
         </Link>
       ))}
-    </div>
+    </nav>
   )
 }
 
@@ -35,16 +35,19 @@ function RouterLayout() {
   return (
     <ModeProvider>
       <Layout>
-        <div className="max-w-7xl mx-auto px-6 py-6 space-y-6 relative">
-          <div className="absolute top-6 left-6 z-10">
-            <h1 className="text-lg font-medium text-white tracking-tight font-display">TradeLab</h1>
-          </div>
-          <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="mx-auto max-w-[1320px] space-y-7 px-5 py-6 md:px-8 md:py-8">
+          <header className="flex flex-wrap items-center justify-between gap-5">
+            <div>
+              <h1 className="font-display text-xl font-semibold tracking-tight text-white">TradeLab</h1>
+              <p className="mt-1 text-xs text-neutral-500">Plan risk. Execute with intent.</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <PrimaryNav />
+              <ModeToggle />
+            </div>
+          </header>
+          <div>
             <PortfolioHeader />
-            <PrimaryNav />
-          </div>
-          <div className="absolute top-6 right-6 z-10">
-            <ModeToggle />
           </div>
           <Outlet />
         </div>
