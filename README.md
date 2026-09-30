@@ -17,7 +17,6 @@ A modern, browser-first trading journal application for tracking and analyzing c
 - **Hyperliquid Integration**: Execute trades directly on Hyperliquid DEX, with live prices, positions, and available assets pulled from the public API
 - **Paper/Live Mode**: Toggle between paper trading (simulation with separate data) and live trading (real execution)
 - **TradingView Webhook**: `POST /api/webhook/trade` lets TradingView alerts create trade plans automatically
-- **Terminal UI**: A companion Textual-based TUI (`python -m tradelab`) backed by the same core logic
 - **Browser-First**: Modern React application running entirely in the browser
 - **Data Persistence**: All trades automatically saved to CSV (separate files for Paper and Live modes)
 
@@ -27,7 +26,6 @@ A modern, browser-first trading journal application for tracking and analyzing c
 - **Routing**: TanStack Router
 - **Data Fetching**: TanStack Query
 - **Backend**: FastAPI + Python
-- **Terminal UI**: Textual
 - **Data**: CSV-based storage (easy to backup and share)
 
 ## Getting Started
@@ -106,14 +104,6 @@ pip install pytest
 pytest tests/ -v
 ```
 
-### Terminal UI
-
-```bash
-cd backend
-source venv/bin/activate
-python -m tradelab
-```
-
 ## Project Structure
 
 ```
@@ -122,10 +112,6 @@ tradelab/
 │   ├── main.py                  # FastAPI backend server
 │   ├── trade_calculator.py      # Position sizing and risk/reward calculations
 │   ├── hyperliquid_client.py    # Hyperliquid DEX API client
-│   ├── tradelab/                # Terminal UI package (Textual)
-│   │   ├── core.py              # Shared core logic (portfolio, trades)
-│   │   ├── tui.py               # Textual TUI
-│   │   └── __main__.py          # `python -m tradelab` entry point
 │   ├── tests/                   # Pytest test suite
 │   ├── requirements.txt         # Python dependencies
 │   ├── trades.csv               # Trade data storage (Live mode, generated at runtime)
