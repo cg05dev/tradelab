@@ -1741,8 +1741,6 @@ class WebhookTrade(BaseModel):
 async def webhook_trade(data: WebhookTrade):
     """Receive trade plans from TradingView alerts via webhook."""
     try:
-        from tradelab import core
-
         direction = data.direction.lower().strip()
         if direction not in ["long", "short"]:
             direction = "long"
@@ -1750,7 +1748,7 @@ async def webhook_trade(data: WebhookTrade):
         mode = data.mode if data.mode in ["paper", "live"] else "paper"
 
         if data.portfolio_size and data.portfolio_size > 0:
-            core.save_portfolio_size(data.portfolio_size, mode)
+            save_portfolio_size(data.portfolio_size, mode)
 
         tps = []
         if data.tp1 > 0:
@@ -1766,27 +1764,38 @@ async def webhook_trade(data: WebhookTrade):
         if data.sl > 0:
             sls.append({"price": data.sl, "allocation": 1.0})
 
-        portfolio = core.load_portfolio_size(mode)
+        portfolio = load_portfolio_size(mode)
         if portfolio <= 0:
             portfolio = data.portfolio_size if data.portfolio_size else 200.0
-            core.save_portfolio_size(portfolio, mode)
+            save_portfolio_size(portfolio, mode)
 
         risk_pct = data.risk_pct if data.risk_pct > 0 else 2.0
-        pos_result = core.calculate_position_size(data.entry, data.sl, data.leverage, direction, risk_pct, mode)
+        pos_result = calculate_position_size(
+            PositionSizeRequest(
+                entry_price=data.entry,
+                stop_loss=data.sl,
+                leverage=data.leverage,
+                direction=direction,
+                risk_percentage=risk_pct,
+            ),
+            mode,
+        )
         position_size = pos_result.get("position_size_dollars", 0)
         margin = pos_result.get("margin_required", 0)
 
-        result = core.add_trade(
-            asset=data.asset,
-            direction=direction,
-            entry_price=data.entry,
-            stop_loss=data.sl if data.sl > 0 else 0,
-            position_size=position_size,
-            take_profits=tps,
-            stop_losses=sls,
-            margin=margin,
-            leverage=data.leverage,
-            mode=mode,
+        result = add_trade(
+            TradeData(
+                asset=data.asset,
+                direction=direction,
+                entry_price=data.entry,
+                stop_loss=data.sl if data.sl > 0 else 0,
+                position_size=position_size,
+                take_profits=[TakeProfit(**tp) for tp in tps],
+                stop_losses=[StopLoss(**sl) for sl in sls],
+                margin=margin,
+                leverage=data.leverage,
+            ),
+            mode,
         )
 
         return {
@@ -1799,6 +1808,8 @@ async def webhook_trade(data: WebhookTrade):
             "liquidation_price": pos_result.get("liquidation_price", 0),
             "trade_index": result.get("trade_index"),
         }
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"[ERROR] Webhook trade error: {e}")
         traceback.print_exc()
