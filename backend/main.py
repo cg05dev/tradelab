@@ -3,7 +3,7 @@ FastAPI Backend for TradeLab
 Handles all trading journal logic and data persistence
 """
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -17,7 +17,11 @@ import io
 import traceback
 import asyncio
 import time
+import hmac
 from threading import Thread
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Import Hyperliquid client
 try:
@@ -30,10 +34,18 @@ from trade_calculator import trade_calc, TradeCalculator
 
 app = FastAPI(title="TradeLab API")
 
-# CORS middleware for React frontend
+# CORS middleware for React frontend. The Vite dev server proxies /api, so only
+# origins that call the API directly need to be listed here.
+DEFAULT_CORS_ORIGINS = "http://localhost:3001,http://127.0.0.1:3001"
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("TRADELAB_CORS_ORIGINS", DEFAULT_CORS_ORIGINS).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins in development
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1745,11 +1757,26 @@ class WebhookTrade(BaseModel):
     tp4: float = 0
     tp4_alloc: float = 0
     mode: str = "paper"
+    # TradingView alerts cannot set custom headers, so the secret may travel in the body
+    secret: Optional[str] = None
+
+
+def verify_webhook_secret(provided: Optional[str]):
+    """Reject webhook calls unless they carry TRADELAB_WEBHOOK_SECRET. Disabled when unset."""
+    expected = os.getenv("TRADELAB_WEBHOOK_SECRET", "")
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Webhook disabled: set TRADELAB_WEBHOOK_SECRET in backend/.env to enable it",
+        )
+    if not provided or not hmac.compare_digest(provided.encode(), expected.encode()):
+        raise HTTPException(status_code=401, detail="Invalid webhook secret")
 
 
 @app.post("/api/webhook/trade")
-async def webhook_trade(data: WebhookTrade):
+async def webhook_trade(data: WebhookTrade, x_webhook_secret: Optional[str] = Header(default=None)):
     """Receive trade plans from TradingView alerts via webhook."""
+    verify_webhook_secret(x_webhook_secret or data.secret)
     try:
         direction = data.direction.lower().strip()
         if direction not in ["long", "short"]:

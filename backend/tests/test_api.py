@@ -203,3 +203,53 @@ class TestExecutionGuard:
 
         assert response.status_code == 403
         hl.market_close.assert_not_called()
+
+
+class TestWebhook:
+    PAYLOAD = {"asset": "BTC", "direction": "long", "entry": 100, "sl": 95, "tp1": 110, "tp1_alloc": 100,
+               "portfolio_size": 10_000, "risk_pct": 1, "mode": "paper"}
+
+    def test_disabled_without_configured_secret(self, client, monkeypatch):
+        monkeypatch.delenv("TRADELAB_WEBHOOK_SECRET", raising=False)
+
+        assert client.post("/api/webhook/trade", json=self.PAYLOAD).status_code == 503
+        assert client.get("/api/trades?mode=paper").json() == {"trades": []}
+
+    @pytest.mark.parametrize("secret", [None, "wrong"])
+    def test_rejects_missing_or_wrong_secret(self, client, monkeypatch, secret):
+        monkeypatch.setenv("TRADELAB_WEBHOOK_SECRET", "s3cret")
+
+        response = client.post("/api/webhook/trade", json={**self.PAYLOAD, "secret": secret})
+
+        assert response.status_code == 401
+        assert client.get("/api/trades?mode=paper").json() == {"trades": []}
+
+    def test_secret_in_body_creates_sized_trade(self, client, monkeypatch):
+        monkeypatch.setenv("TRADELAB_WEBHOOK_SECRET", "s3cret")
+
+        response = client.post("/api/webhook/trade", json={**self.PAYLOAD, "secret": "s3cret"})
+
+        assert response.status_code == 200
+        assert response.json()["position_size"] == pytest.approx(2_000)
+        trades = client.get("/api/trades/open?mode=paper").json()["trades"]
+        assert len(trades) == 1
+        assert "s3cret" not in str(trades)
+
+    def test_secret_in_header(self, client, monkeypatch):
+        monkeypatch.setenv("TRADELAB_WEBHOOK_SECRET", "s3cret")
+
+        response = client.post("/api/webhook/trade", json=self.PAYLOAD, headers={"X-Webhook-Secret": "s3cret"})
+
+        assert response.status_code == 200
+
+
+class TestCors:
+    def test_allows_frontend_origin(self, client):
+        response = client.get("/health", headers={"Origin": "http://localhost:3001"})
+
+        assert response.headers.get("access-control-allow-origin") == "http://localhost:3001"
+
+    def test_does_not_allow_other_origins(self, client):
+        response = client.get("/health", headers={"Origin": "https://evil.example"})
+
+        assert "access-control-allow-origin" not in response.headers

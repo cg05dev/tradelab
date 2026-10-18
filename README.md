@@ -16,7 +16,7 @@ A modern, browser-first trading journal application for tracking and analyzing c
 - **Analytics Dashboard**: Timeframe filtering, equity/drawdown charts, and trade history with filtering, search, sorting, and pagination
 - **Hyperliquid Integration**: Execute trades directly on Hyperliquid DEX, with live prices, positions, and available assets pulled from the public API
 - **Paper/Live Mode**: Toggle between paper trading (simulation with separate data) and live trading (real execution)
-- **TradingView Webhook**: `POST /api/webhook/trade` lets TradingView alerts create trade plans automatically
+- **TradingView Webhook**: `POST /api/webhook/trade` lets TradingView alerts create trade plans automatically (secret-protected)
 - **Browser-First**: Modern React application running entirely in the browser
 - **Data Persistence**: All trades automatically saved to CSV (separate files for Paper and Live modes)
 
@@ -67,7 +67,22 @@ A modern, browser-first trading journal application for tracking and analyzing c
    HYPERLIQUID_PRIVATE_KEY=0x...
    HYPERLIQUID_USE_TESTNET=true
    ```
-   Without it, the app runs fully in paper mode.
+   Without it, the app runs fully in paper mode. Live order endpoints are refused by the backend
+   whenever the app is in paper mode.
+
+5. **(Optional) TradingView Webhook and CORS:**
+
+   The webhook is disabled until you set a secret in `backend/.env`:
+   ```env
+   TRADELAB_WEBHOOK_SECRET=some-long-random-string
+   # Comma-separated origins allowed to call the API directly (default: the Vite dev server)
+   TRADELAB_CORS_ORIGINS=http://localhost:3001,http://127.0.0.1:3001
+   ```
+   TradingView alerts can't send custom headers, so put the secret in the alert's JSON body:
+   ```json
+   {"secret": "some-long-random-string", "asset": "BTC", "direction": "long", "entry": 64000, "sl": 62500, "tp1": 68000, "tp1_alloc": 100, "mode": "paper"}
+   ```
+   Other callers can send it as an `X-Webhook-Secret` header instead.
 
 ### Running the Application
 
@@ -100,8 +115,8 @@ The application will be available at **http://localhost:3001**
 ```bash
 cd backend
 source venv/bin/activate
-pip install pytest
-pytest tests/ -v
+pip install -r requirements-dev.txt
+pytest -v
 ```
 
 ## Project Structure
