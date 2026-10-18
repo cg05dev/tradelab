@@ -16,6 +16,11 @@ def _trade(**overrides):
     return trade
 
 
+def _open(client, **overrides):
+    """Add a paper trade and return its id."""
+    return client.post("/api/trades?mode=paper", json=_trade(**overrides)).json()["trade_index"]
+
+
 @pytest.fixture
 def funded(client):
     client.put("/api/portfolio?mode=paper", json={"portfolio_size": 10_000})
@@ -62,7 +67,7 @@ class TestTradeLifecycle:
         assert len(trades) == 1
         assert trades[0]["Asset"] == "BTC"
         assert trades[0]["Margin"] == pytest.approx(200)
-        assert trades[0]["_index"] == 0
+        assert trades[0]["_index"] == response.json()["trade_index"]
 
     def test_modes_have_separate_journals(self, funded):
         funded.post("/api/trades?mode=paper", json=_trade())
@@ -81,33 +86,33 @@ class TestTradeLifecycle:
         assert response.status_code == 400
 
     def test_close_books_pnl_to_portfolio(self, funded):
-        funded.post("/api/trades?mode=paper", json=_trade())
+        trade_id = _open(funded)
 
-        body = funded.post("/api/trades/close?mode=paper", json={"trade_index": 0, "exit_price": 110}).json()
+        body = funded.post("/api/trades/close?mode=paper", json={"trade_index": trade_id, "exit_price": 110}).json()
 
         assert body["pnl"] == pytest.approx(200)
         assert body["new_portfolio_size"] == pytest.approx(10_200)
         assert funded.get("/api/trades/open?mode=paper").json()["trades"] == []
 
     def test_cannot_close_twice(self, funded):
-        funded.post("/api/trades?mode=paper", json=_trade())
-        funded.post("/api/trades/close?mode=paper", json={"trade_index": 0, "exit_price": 110})
+        trade_id = _open(funded)
+        funded.post("/api/trades/close?mode=paper", json={"trade_index": trade_id, "exit_price": 110})
 
-        response = funded.post("/api/trades/close?mode=paper", json={"trade_index": 0, "exit_price": 110})
+        response = funded.post("/api/trades/close?mode=paper", json={"trade_index": trade_id, "exit_price": 110})
 
         assert response.status_code == 400
 
     def test_partial_take_profit_then_final(self, funded):
-        funded.post("/api/trades?mode=paper", json=_trade())
+        trade_id = _open(funded)
 
         first = funded.post("/api/trades/partial-close?mode=paper", json={
-            "trade_index": 0, "tp_price": 110, "tp_allocation": 0.5, "tp_index": 0,
+            "trade_index": trade_id, "tp_price": 110, "tp_allocation": 0.5, "tp_index": 0,
         }).json()
         assert first["pnl"] == pytest.approx(100)
         assert first["remaining_position_size"] == pytest.approx(1_000)
 
         funded.post("/api/trades/partial-close?mode=paper", json={
-            "trade_index": 0, "tp_price": 120, "tp_allocation": 1.0, "tp_index": 1,
+            "trade_index": trade_id, "tp_price": 120, "tp_allocation": 1.0, "tp_index": 1,
         })
 
         closed = funded.get("/api/trades/closed?mode=paper").json()["trades"]
@@ -116,10 +121,10 @@ class TestTradeLifecycle:
         assert funded.get("/api/portfolio?mode=paper").json()["portfolio_size"] == pytest.approx(10_300)
 
     def test_stop_loss_hit_closes_trade(self, funded):
-        funded.post("/api/trades?mode=paper", json=_trade())
+        trade_id = _open(funded)
 
         body = funded.post("/api/trades/stop-loss-hit?mode=paper", json={
-            "trade_index": 0, "sl_price": 95, "sl_allocation": 1.0, "sl_index": 0,
+            "trade_index": trade_id, "sl_price": 95, "sl_allocation": 1.0, "sl_index": 0,
         }).json()
 
         assert body["pnl"] == pytest.approx(-100)
@@ -127,10 +132,10 @@ class TestTradeLifecycle:
         assert closed[0]["P&L"] == pytest.approx(-100)
 
     def test_delete(self, funded):
-        funded.post("/api/trades?mode=paper", json=_trade(asset="BTC"))
-        funded.post("/api/trades?mode=paper", json=_trade(asset="ETH"))
+        btc = _open(funded, asset="BTC")
+        _open(funded, asset="ETH")
 
-        funded.delete("/api/trades/0?mode=paper")
+        assert funded.delete(f"/api/trades/{btc}?mode=paper").status_code == 200
 
         trades = funded.get("/api/trades?mode=paper").json()["trades"]
         assert [t["Asset"] for t in trades] == ["ETH"]
@@ -139,10 +144,9 @@ class TestTradeLifecycle:
 class TestClosedTradesAndAnalytics:
     @pytest.fixture
     def history(self, funded):
-        for asset, exit_price in [("BTC", 110), ("ETH", 90), ("SOL", 120)]:
-            funded.post("/api/trades?mode=paper", json=_trade(asset=asset))
-        for index, exit_price in enumerate([110, 90, 120]):
-            funded.post("/api/trades/close?mode=paper", json={"trade_index": index, "exit_price": exit_price})
+        ids = [_open(funded, asset=asset) for asset in ["BTC", "ETH", "SOL"]]
+        for trade_id, exit_price in zip(ids, [110, 90, 120]):
+            funded.post("/api/trades/close?mode=paper", json={"trade_index": trade_id, "exit_price": exit_price})
         return funded
 
     def test_search_sort_and_paginate(self, history):

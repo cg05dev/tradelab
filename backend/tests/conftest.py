@@ -10,7 +10,8 @@ from routers import hyperliquid
 
 @pytest.fixture
 def data_dir(tmp_path, monkeypatch):
-    """Point every data file at a temp dir so tests never touch real journals."""
+    """Point the database and legacy data files at a temp dir so tests never touch real journals."""
+    monkeypatch.setattr(storage, "DB_FILE", str(tmp_path / "tradelab.db"))
     monkeypatch.setattr(storage, "MODE_FILE", str(tmp_path / "mode_config.json"))
     monkeypatch.setattr(storage, "DATA_FILES", {
         "live": {
