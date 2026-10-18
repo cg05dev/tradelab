@@ -28,6 +28,27 @@ A modern, browser-first trading journal application for tracking and analyzing c
 - **Backend**: FastAPI + Python
 - **Data**: CSV-based storage (easy to backup and share)
 
+## Design Decisions
+
+- **Risk-first position sizing.** You choose how much of the account to risk, not how big the position is.
+  Risk amount = portfolio × risk %. Position notional = risk amount ÷ distance to the stop (or to the
+  estimated liquidation price when no stop is set). Margin = notional ÷ leverage. Liquidation is estimated as
+  `entry × (1 ∓ (1/leverage − maintenance margin))`, using Hyperliquid's 1.25% maintenance margin for major assets.
+- **The backend is the safety gate for real money.** The UI hides live actions in paper mode, but the API
+  doesn't trust that: order and close endpoints refuse to run unless the persisted mode is `live`, and the check
+  fails closed for any other value. Orders are sized from a price the server fetches itself, not the price the
+  browser sent.
+- **Market orders as IOC limits.** Hyperliquid has no true market order, so entries are immediate-or-cancel
+  limits with a 0.2% buffer. Take profits are reduce-only resting limits; stop losses are trigger orders.
+- **Paper and live data never mix.** Each mode has its own journal and portfolio files, so simulated trades
+  can't distort live performance stats.
+- **Webhook auth that works with TradingView.** TradingView alerts can't set headers, so the shared secret
+  travels in the JSON body and is compared in constant time. The endpoint is off until a secret is configured.
+- **CSV storage, on purpose.** It's a single-user local app; plain CSV files are human-readable, trivially
+  backed up, and open in a spreadsheet. The trade-off is no transactions or concurrent writers.
+- **Tests never touch real money or data.** Calculator math is tested as pure functions. API tests run against
+  a temporary data directory with the Hyperliquid client mocked out.
+
 ## Getting Started
 
 ### Prerequisites
