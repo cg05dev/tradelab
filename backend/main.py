@@ -107,6 +107,8 @@ JOURNAL_COLUMNS = [
     'Confirmations', 'Thesis', 'Status', 'Exit_Price', 'P&L', 'Hold_Time',
     'TP_Hit', 'TP_Price', 'SL_Hit', 'SL_Price', 'Hit_TPs', 'Margin', 'Leverage'
 ]
+# Text columns that pandas would otherwise infer as float when every value is empty
+TEXT_COLUMNS = ['Date', 'Asset', 'Direction', 'TPs', 'SLs', 'Confirmations', 'Thesis', 'Status', 'Hold_Time', 'Hit_TPs']
 
 def _normalize_mode(mode: Optional[str] = None):
     if mode in DATA_FILES:
@@ -133,7 +135,7 @@ def load_trades(mode: Optional[str] = None):
         if mode == 'paper':
             _ensure_paper_files_exist()
         if os.path.exists(files['trades']):
-            df = pd.read_csv(files['trades'])
+            df = pd.read_csv(files['trades'], dtype={col: object for col in TEXT_COLUMNS})
             if 'Hit_TPs' not in df.columns:
                 df['Hit_TPs'] = [json.dumps([]) for _ in range(len(df))]
             if 'SLs' not in df.columns:
@@ -268,11 +270,12 @@ def shutdown():
     return {"message": "Shutdown signal received"}
 
 @app.post("/api/portfolio/reset")
-def reset_portfolio():
-    """Reset portfolio configuration file"""
+def reset_portfolio(mode: Optional[str] = None):
+    """Reset portfolio configuration file for the selected mode"""
     try:
-        if os.path.exists(CONFIG_FILE):
-            os.remove(CONFIG_FILE)
+        portfolio_file = _get_mode_file(mode)['portfolio']
+        if os.path.exists(portfolio_file):
+            os.remove(portfolio_file)
             return {"message": "Portfolio reset successfully"}
         return {"message": "Portfolio file does not exist"}
     except Exception as e:
@@ -550,8 +553,8 @@ def add_trade(trade_data: TradeData, mode: Optional[str] = None):
             'Direction': trade_data.direction.lower(),
             'Entry': float(trade_data.entry_price),
             'SL': float(trade_data.stop_loss) if trade_data.stop_loss > 0 else 0.0,
-            'TPs': json.dumps([tp.dict() for tp in trade_data.take_profits]),
-            'SLs': json.dumps([sl.dict() for sl in trade_data.stop_losses]),
+            'TPs': json.dumps([tp.model_dump() for tp in trade_data.take_profits]),
+            'SLs': json.dumps([sl.model_dump() for sl in trade_data.stop_losses]),
             'Position_Size': float(trade_data.position_size),
             'Thesis': str(trade_data.thesis) if trade_data.thesis else '',
             'Status': 'Open',
@@ -567,10 +570,17 @@ def add_trade(trade_data: TradeData, mode: Optional[str] = None):
             'Leverage': int(trade_data.leverage) if trade_data.leverage else 1
         }
         
-        df = pd.concat([df, pd.DataFrame([new_trade])], ignore_index=True)
+        new_row = pd.DataFrame([new_trade])
+        if df.empty:
+            # Keep the journal's full column set without concatenating an empty frame
+            df = new_row.reindex(columns=df.columns.union(new_row.columns, sort=False))
+        else:
+            df = pd.concat([df, new_row], ignore_index=True)
         save_trades(df, current_mode)
         
         return {"message": "Trade added successfully", "trade_index": len(df) - 1}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -1260,13 +1270,13 @@ def get_analytics_overview(mode: Optional[str] = None):
 def check_execution_allowed():
     """Check if execution is allowed based on current mode. Raises 403 if blocked."""
     mode = load_mode()
-    if mode == "planning":
+    if mode != "live":
         raise HTTPException(
             status_code=403,
             detail={
                 "error": "mode_blocked",
-                "mode": "planning",
-                "reason": "Execution endpoints are blocked in planning mode. Switch to live mode to execute trades."
+                "mode": mode,
+                "reason": "Execution endpoints are blocked in paper mode. Switch to live mode to execute trades."
             }
         )
 
