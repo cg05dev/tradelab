@@ -11,11 +11,13 @@ from models import CloseTradeRequest, PartialCloseRequest, StopLossHitRequest, T
 from storage import (
     JOURNAL_COLUMNS,
     clean_trade_data,
+    clear_trades,
+    delete_trade as delete_trade_row,
+    insert_trade,
     load_mode,
-    load_portfolio_size,
     load_trades,
-    save_portfolio_size,
-    save_trades,
+    replace_trades,
+    update_trade,
 )
 
 logger = logging.getLogger(__name__)
@@ -168,8 +170,6 @@ def add_trade(trade_data: TradeData, mode: Optional[str] = None):
                 if trade_data.direction.lower() == 'short' and tp.price >= trade_data.entry_price:
                     raise HTTPException(status_code=400, detail=f"Take profit {tp.price} must be below entry price for short positions")
         
-        df = load_trades(current_mode)
-        
         new_trade = {
             'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'Asset': trade_data.asset.strip(),
@@ -193,15 +193,9 @@ def add_trade(trade_data: TradeData, mode: Optional[str] = None):
             'Leverage': int(trade_data.leverage) if trade_data.leverage else 1
         }
         
-        new_row = pd.DataFrame([new_trade])
-        if df.empty:
-            # Keep the journal's full column set without concatenating an empty frame
-            df = new_row.reindex(columns=df.columns.union(new_row.columns, sort=False))
-        else:
-            df = pd.concat([df, new_row], ignore_index=True)
-        save_trades(df, current_mode)
-        
-        return {"message": "Trade added successfully", "trade_index": len(df) - 1}
+        trade_id = insert_trade(new_trade, current_mode)
+
+        return {"message": "Trade added successfully", "trade_index": trade_id}
     except HTTPException:
         raise
     except Exception as e:
@@ -218,6 +212,7 @@ def close_trade(request: CloseTradeRequest, mode: Optional[str] = None):
         raise HTTPException(status_code=400, detail=f"Invalid trade index: {request.trade_index}. Valid indices: {list(df.index)}")
     
     trade = df.loc[request.trade_index]
+    updates = {}
     
     if trade['Status'] != 'Open':
         raise HTTPException(status_code=400, detail="Trade is already closed")
@@ -237,17 +232,15 @@ def close_trade(request: CloseTradeRequest, mode: Optional[str] = None):
     hold_time = (exit_date - entry_date).total_seconds() / 3600
     
     # Update trade
-    df.at[request.trade_index, 'Status'] = 'Closed'
-    df.at[request.trade_index, 'Exit_Price'] = request.exit_price
-    df.at[request.trade_index, 'P&L'] = pnl
-    df.at[request.trade_index, 'Hold_Time'] = f"{hold_time:.1f}h"
+    updates['Status'] = 'Closed'
+    updates['Exit_Price'] = request.exit_price
+    updates['P&L'] = pnl
+    updates['Hold_Time'] = f"{hold_time:.1f}h"
     
     # Update portfolio size
-    portfolio_size = load_portfolio_size(current_mode)
-    new_portfolio_size = portfolio_size + pnl
-    save_portfolio_size(new_portfolio_size, current_mode)
+    portfolio_delta = pnl
     
-    save_trades(df, current_mode)
+    new_portfolio_size = update_trade(request.trade_index, updates, current_mode, portfolio_delta)
     
     return {
         "message": "Trade closed successfully",
@@ -266,6 +259,7 @@ def partial_close_trade(request: PartialCloseRequest, mode: Optional[str] = None
         raise HTTPException(status_code=400, detail=f"Invalid trade index: {request.trade_index}. Valid indices: {list(df.index)}")
     
     trade = df.loc[request.trade_index]
+    updates = {}
     
     if trade['Status'] != 'Open':
         raise HTTPException(status_code=400, detail="Trade is already closed")
@@ -282,25 +276,23 @@ def partial_close_trade(request: PartialCloseRequest, mode: Optional[str] = None
         pnl = (entry_price - request.tp_price) / entry_price * allocated_position_size
     
     # Update portfolio size
-    portfolio_size = load_portfolio_size(current_mode)
-    new_portfolio_size = portfolio_size + pnl
-    save_portfolio_size(new_portfolio_size, current_mode)
+    portfolio_delta = pnl
     
     # Update position size
     remaining_position_size = total_position_size - allocated_position_size
     
-    df.at[request.trade_index, 'Position_Size'] = remaining_position_size
-    df.at[request.trade_index, 'TP_Hit'] = True
-    df.at[request.trade_index, 'TP_Price'] = request.tp_price
+    updates['Position_Size'] = remaining_position_size
+    updates['TP_Hit'] = True
+    updates['TP_Price'] = request.tp_price
     
     # Track hit TPs
     hit_tps = json.loads(trade['Hit_TPs']) if trade['Hit_TPs'] else []
     hit_tps.append(request.tp_index)
-    df.at[request.trade_index, 'Hit_TPs'] = json.dumps(hit_tps)
+    updates['Hit_TPs'] = json.dumps(hit_tps)
     
     # Update cumulative P&L
     current_pnl = trade['P&L'] if pd.notna(trade['P&L']) else 0.0
-    df.at[request.trade_index, 'P&L'] = current_pnl + pnl
+    updates['P&L'] = current_pnl + pnl
     
     # Check if should fully close
     all_tps = json.loads(trade['TPs']) if trade['TPs'] else []
@@ -317,17 +309,15 @@ def partial_close_trade(request: PartialCloseRequest, mode: Optional[str] = None
         exit_date = datetime.now()
         hold_time = (exit_date - entry_date).total_seconds() / 3600
         
-        df.at[request.trade_index, 'Status'] = 'Closed'
-        df.at[request.trade_index, 'Exit_Price'] = request.tp_price
-        df.at[request.trade_index, 'P&L'] = current_pnl + pnl + remaining_pnl
-        df.at[request.trade_index, 'Hold_Time'] = f"{hold_time:.1f}h"
+        updates['Status'] = 'Closed'
+        updates['Exit_Price'] = request.tp_price
+        updates['P&L'] = current_pnl + pnl + remaining_pnl
+        updates['Hold_Time'] = f"{hold_time:.1f}h"
         
         # Update portfolio with remaining P&L
-        portfolio_size = load_portfolio_size(current_mode)
-        new_portfolio_size = portfolio_size + remaining_pnl
-        save_portfolio_size(new_portfolio_size, current_mode)
+        portfolio_delta += remaining_pnl
     
-    save_trades(df, current_mode)
+    new_portfolio_size = update_trade(request.trade_index, updates, current_mode, portfolio_delta)
     
     return {
         "message": "TP hit - trade partially closed" if remaining_position_size > 0 else "TP hit - trade fully closed",
@@ -347,6 +337,7 @@ def stop_loss_hit(request: StopLossHitRequest, mode: Optional[str] = None):
         raise HTTPException(status_code=400, detail=f"Invalid trade index: {request.trade_index}. Valid indices: {list(df.index)}")
     
     trade = df.loc[request.trade_index]
+    updates = {}
     
     if trade['Status'] != 'Open':
         raise HTTPException(status_code=400, detail="Trade is already closed")
@@ -363,20 +354,18 @@ def stop_loss_hit(request: StopLossHitRequest, mode: Optional[str] = None):
         pnl = (entry_price - request.sl_price) / entry_price * allocated_position_size
     
     # Update portfolio size
-    portfolio_size = load_portfolio_size(current_mode)
-    new_portfolio_size = portfolio_size + pnl
-    save_portfolio_size(new_portfolio_size, current_mode)
+    portfolio_delta = pnl
     
     # Update position size
     remaining_position_size = total_position_size - allocated_position_size
     
-    df.at[request.trade_index, 'Position_Size'] = remaining_position_size
-    df.at[request.trade_index, 'SL_Hit'] = True
-    df.at[request.trade_index, 'SL_Price'] = request.sl_price
+    updates['Position_Size'] = remaining_position_size
+    updates['SL_Hit'] = True
+    updates['SL_Price'] = request.sl_price
     
     # Update cumulative P&L
     current_pnl = trade['P&L'] if pd.notna(trade['P&L']) else 0.0
-    df.at[request.trade_index, 'P&L'] = current_pnl + pnl
+    updates['P&L'] = current_pnl + pnl
     
     # Check if should fully close
     all_sls = json.loads(trade['SLs']) if trade['SLs'] else []
@@ -394,17 +383,15 @@ def stop_loss_hit(request: StopLossHitRequest, mode: Optional[str] = None):
         exit_date = datetime.now()
         hold_time = (exit_date - entry_date).total_seconds() / 3600
         
-        df.at[request.trade_index, 'Status'] = 'Closed'
-        df.at[request.trade_index, 'Exit_Price'] = request.sl_price
-        df.at[request.trade_index, 'P&L'] = current_pnl + pnl + remaining_pnl
-        df.at[request.trade_index, 'Hold_Time'] = f"{hold_time:.1f}h"
+        updates['Status'] = 'Closed'
+        updates['Exit_Price'] = request.sl_price
+        updates['P&L'] = current_pnl + pnl + remaining_pnl
+        updates['Hold_Time'] = f"{hold_time:.1f}h"
         
         # Update portfolio with remaining P&L
-        portfolio_size = load_portfolio_size(current_mode)
-        new_portfolio_size = portfolio_size + remaining_pnl
-        save_portfolio_size(new_portfolio_size, current_mode)
+        portfolio_delta += remaining_pnl
     
-    save_trades(df, current_mode)
+    new_portfolio_size = update_trade(request.trade_index, updates, current_mode, portfolio_delta)
     
     return {
         "message": "SL hit - trade partially closed" if remaining_position_size > 0 else "SL hit - trade fully closed",
@@ -415,12 +402,10 @@ def stop_loss_hit(request: StopLossHitRequest, mode: Optional[str] = None):
 
 @router.delete("/clear")
 def clear_all_trades(mode: Optional[str] = None):
-    """Clear all trades from the CSV file"""
+    """Clear all trades for the current mode"""
     try:
         current_mode = mode or load_mode()
-        # Create empty DataFrame with the correct columns
-        empty_df = pd.DataFrame(columns=JOURNAL_COLUMNS)
-        save_trades(empty_df, current_mode)
+        clear_trades(current_mode)
         
         # Reset portfolio size to 0 or keep it - user's choice
         # For now, we'll keep the portfolio size
@@ -434,16 +419,10 @@ def clear_all_trades(mode: Optional[str] = None):
 
 @router.delete("/{trade_index}")
 def delete_trade(trade_index: int, mode: Optional[str] = None):
-    """Delete a trade by index"""
+    """Delete a trade by id"""
     current_mode = mode or load_mode()
-    df = load_trades(current_mode)
-    
-    if trade_index >= len(df) or trade_index < 0:
+    if not delete_trade_row(trade_index, current_mode):
         raise HTTPException(status_code=400, detail="Invalid trade index")
-    
-    # Delete the trade by dropping the row
-    df = df.drop(df.index[trade_index]).reset_index(drop=True)
-    save_trades(df, current_mode)
     
     return {
         "message": "Trade deleted successfully",
@@ -495,7 +474,7 @@ async def import_trades(file: UploadFile = File(...), mode: Optional[str] = None
             df = df[JOURNAL_COLUMNS]
             
             # Save the imported trades
-            save_trades(df, current_mode)
+            replace_trades(df, current_mode)
             
             # Count trades
             total_trades = len(df)

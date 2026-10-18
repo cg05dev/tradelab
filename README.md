@@ -18,7 +18,7 @@ A modern, browser-first trading journal application for tracking and analyzing c
 - **Paper/Live Mode**: Toggle between paper trading (simulation with separate data) and live trading (real execution)
 - **TradingView Webhook**: `POST /api/webhook/trade` lets TradingView alerts create trade plans automatically (secret-protected)
 - **Browser-First**: Modern React application running entirely in the browser
-- **Data Persistence**: All trades automatically saved to CSV (separate files for Paper and Live modes)
+- **Data Persistence**: Trades, portfolio size and mode stored in a local SQLite database, with Paper and Live kept separate; CSV import for existing journals
 
 ## Tech Stack
 
@@ -26,7 +26,7 @@ A modern, browser-first trading journal application for tracking and analyzing c
 - **Routing**: TanStack Router
 - **Data Fetching**: TanStack Query
 - **Backend**: FastAPI + Python
-- **Data**: CSV-based storage (easy to backup and share)
+- **Data**: SQLite (Python standard library, no server)
 
 ## Design Decisions
 
@@ -44,8 +44,11 @@ A modern, browser-first trading journal application for tracking and analyzing c
   can't distort live performance stats.
 - **Webhook auth that works with TradingView.** TradingView alerts can't set headers, so the shared secret
   travels in the JSON body and is compared in constant time. The endpoint is off until a secret is configured.
-- **CSV storage, on purpose.** It's a single-user local app; plain CSV files are human-readable, trivially
-  backed up, and open in a spreadsheet. The trade-off is no transactions or concurrent writers.
+- **SQLite, not a database server.** It's a single-user local app, so an embedded database fits: one file,
+  nothing to run, and it's in Python's standard library. Each write is a transaction, and closing a trade
+  updates the trade and the portfolio balance together, so a crash can't leave them out of sync. Trades have
+  stable ids scoped to their mode, so an id from the paper journal can never touch a live trade. Earlier
+  versions used CSV files; those are imported once on first start and left untouched as a backup.
 - **Tests never touch real money or data.** Calculator math is tested as pure functions. API tests run against
   a temporary data directory with the Hyperliquid client mocked out.
 
@@ -148,18 +151,14 @@ tradelab/
 │   ├── main.py                  # App setup: CORS and router registration
 │   ├── routers/                 # One APIRouter per area (trades, analytics, calculations,
 │   │                            #   portfolio, mode, hyperliquid, webhook, system)
-│   ├── storage.py               # CSV/JSON persistence, per-mode data files
+│   ├── storage.py               # SQLite persistence and one-time CSV import
 │   ├── models.py                # Shared Pydantic request models
 │   ├── trade_calculator.py      # Position sizing and risk/reward calculations
 │   ├── hyperliquid_client.py    # Hyperliquid DEX API client
-│   ├── tests/                   # Pytest suite (calculator, API, Hyperliquid client)
+│   ├── tests/                   # Pytest suite (calculator, API, storage, Hyperliquid client)
 │   ├── requirements.txt         # Python dependencies
 │   ├── requirements-dev.txt     # Test dependencies
-│   ├── trades.csv               # Trade data storage (Live mode, generated at runtime)
-│   ├── trades_paper.csv         # Trade data storage (Paper mode, generated at runtime)
-│   ├── portfolio_config.json    # Portfolio size (Live mode, generated at runtime)
-│   ├── portfolio_paper.json     # Portfolio size (Paper mode, generated at runtime)
-│   └── mode_config.json         # Current mode persistence (generated at runtime)
+│   └── tradelab.db              # SQLite database (generated at runtime; TRADELAB_DB_FILE overrides)
 ├── frontend/
 │   ├── src/
 │   │   ├── components/          # Reusable React components

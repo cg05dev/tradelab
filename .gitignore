@@ -53,6 +53,8 @@ tradelab-notes/
 
 # Backend data files
 backend/*.csv
+backend/*.db
+backend/*.db-journal
 backend/*.json
 backend/**/*.json
 
