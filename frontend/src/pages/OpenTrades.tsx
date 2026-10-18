@@ -4,6 +4,7 @@ import { getOpenTrades, closeTrade, partialCloseTrade, stopLossHit } from '../ap
 import { getHyperliquidPrice, closeHyperliquidPosition } from '../api/hyperliquid'
 import { TradeCardSkeleton } from '../components/LoadingSkeleton'
 import { useMode } from '../contexts/ModeContext'
+import { getErrorMessage } from '../api/error'
 import type { Trade, ApiError } from '../types'
 
 type TradeWithIndex = Trade & { index: number }
@@ -73,16 +74,14 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
 
   useEffect(() => {
     loadTrades()
-    
-    // Poll prices every 670ms
-    const interval = setInterval(() => {
-      if (trades.length > 0) {
-        fetchCurrentPrices(trades)
-      }
-    }, 670)
-    
+  }, [loadTrades])
+
+  // Poll prices every 670ms for whatever trades are currently open
+  useEffect(() => {
+    if (trades.length === 0) return
+    const interval = setInterval(() => fetchCurrentPrices(trades), 670)
     return () => clearInterval(interval)
-  }, [loadTrades, fetchCurrentPrices, trades.length])
+  }, [trades, fetchCurrentPrices])
 
   useImperativeHandle(ref, () => ({
     loadTrades: () => loadTrades(false)
@@ -139,99 +138,61 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
     if (!asset) return
     // Extract coin name from asset (e.g., "BTC" from "BTC-USDC")
     const coin = asset.split('-')[0] ?? ''
-    
-    console.log(`[INFO] Attempting to close trade: index=${tradeIndex}, asset=${asset}, coin=${coin}`)
-    console.log(`[INFO] selectedTrade:`, selectedTrade)
-    console.log(`[INFO] Current trades:`, trades)
-    
+
     setIsClosing(true)
-    
-    // Close position on Hyperliquid if requested and in live mode
-    let fillPrice
-    if (closeOnHyperliquid && mode === 'live') {
-      try {
-        console.log(`[INFO] Closing position on Hyperliquid for ${coin}...`)
-        const response = await closeHyperliquidPosition(coin)
-        console.log(`[INFO] Hyperliquid response:`, response.data)
-        
-        if (!response.data) {
-          throw new Error('No response data from Hyperliquid API')
+    try {
+      // Close position on Hyperliquid if requested and in live mode
+      let fillPrice: number | undefined
+      if (closeOnHyperliquid && mode === 'live') {
+        try {
+          const response = await closeHyperliquidPosition(coin)
+          if (response.data?.status !== 'success') {
+            throw new Error(response.data?.message || 'Failed to close position')
+          }
+
+          // Use the actual fill price from Hyperliquid
+          fillPrice = response.data?.fill_price
+          if (!fillPrice || fillPrice <= 0) {
+            throw new Error(`Invalid fill price from Hyperliquid: ${fillPrice}`)
+          }
+        } catch (error) {
+          console.error('[ERROR] Error closing Hyperliquid position:', error)
+          // Ask user if they want to continue closing in journal despite Hyperliquid error
+          const continueAnyway = confirm(
+            `Error closing position on Hyperliquid:\n${getErrorMessage(error)}\n\nDo you want to continue and close the trade in the journal anyway?`
+          )
+          if (!continueAnyway) return
+          fillPrice = undefined
         }
-        
-        if (response.data?.status !== 'success') {
-          throw new Error(response.data?.message || 'Failed to close position')
-        }
-        
-        // Get the actual fill price from Hyperliquid response
-        fillPrice = response.data?.fill_price
-        if (!fillPrice || fillPrice <= 0) {
-          throw new Error(`Invalid fill price from Hyperliquid: ${fillPrice}`)
-        }
-        
-        console.log(`[INFO] Position closed on Hyperliquid at $${fillPrice.toFixed(2)}`)
-      } catch (error) {
-        console.error('[ERROR] Error closing Hyperliquid position:', error)
-        const err = error as ApiError
-        const errorMsg = err.response?.data?.detail || (error instanceof Error ? error.message : 'Unknown error')
-        console.error('[ERROR] Error details:', errorMsg)
-        
-        // Ask user if they want to continue closing in journal despite Hyperliquid error
-        const continueAnyway = confirm(
-          `Error closing position on Hyperliquid:\n${errorMsg}\n\nDo you want to continue and close the trade in the journal anyway?`
-        )
-        if (!continueAnyway) {
+      }
+
+      // If no fill price from Hyperliquid (either skipped or failed), use current market price
+      if (!fillPrice) {
+        fillPrice = currentPrices[asset]
+        if (!fillPrice) {
+          alert(`Could not determine price for closing trade: ${asset}`)
           return
         }
-        // Fall through to close in journal with current price
       }
-    }
-    
-    // If no fill price from Hyperliquid (either skipped or failed), use current market price
-    if (!fillPrice) {
-      const currentPrice = asset ? currentPrices[asset] : undefined
-      console.log(`[INFO] Current price lookup: asset=${asset}, currentPrices=`, currentPrices)
-      if (currentPrice) {
-        fillPrice = currentPrice
-        console.log(`[INFO] Using current market price: $${fillPrice.toFixed(2)}`)
-      } else {
-        console.error('[ERROR] No current price found for asset:', asset)
-        alert(`Could not determine price for closing trade: ${asset}`)
-        return
+
+      setShowCloseModal(false)
+      setSelectedTrade(null)
+      setCloseOnHyperliquid(true)
+
+      try {
+        await closeTrade(tradeIndex, fillPrice)
+        // Immediately remove the trade from local state, then reload from backend for consistency
+        setTrades((prev: Trade[]) => prev.filter((trade, idx) => (trade._index ?? idx) !== tradeIndex))
+        await loadTrades()
+        alert(`Trade closed successfully at $${fillPrice.toFixed(2)}`)
+      } catch (error) {
+        console.error('[ERROR] Error closing trade in journal:', error)
+        alert(`Error: ${getErrorMessage(error, 'Error closing trade in journal')}`)
       }
-    }
-
-    // Close trade in journal at the fill price
-    console.log(`[INFO] Closing trade in journal: index=${tradeIndex}, fillPrice=$${fillPrice.toFixed(2)}`)
-    setShowCloseModal(false)
-    setSelectedTrade(null)
-    setCloseOnHyperliquid(true)
-
-    try {
-      console.log(`[INFO] Calling closeTrade API with: tradeIndex=${tradeIndex}, exitPrice=${fillPrice}`)
-      const closeResult = await closeTrade(tradeIndex, fillPrice)
-      console.log(`[INFO] closeTrade API response:`, closeResult)
-      console.log(`[INFO] Trade successfully closed in journal`)
-      // Immediately remove the trade from local state while we reload from backend
-      setTrades((prev: Trade[]) => prev.filter((_, idx) => {
-        const actualIndex = prev[idx]._index !== undefined ? prev[idx]._index : idx
-        console.log(`[DEBUG] Checking trade at index ${idx}: actualIndex=${actualIndex}, tradeIndex=${tradeIndex}, keep=${actualIndex !== tradeIndex}`)
-        return actualIndex !== tradeIndex
-      }))
-      // Then reload from backend to ensure consistency
-      console.log(`[INFO] Reloading trades from backend...`)
-      await loadTrades()
-      console.log(`[INFO] Trades reloaded successfully`)
-      alert(`Trade closed successfully at $${fillPrice.toFixed(2)}`)
-    } catch (error) {
-      const err = error as ApiError
-      console.error('[ERROR] Error closing trade in journal:', error)
-      console.error('[ERROR] Full error object:', JSON.stringify(error, null, 2))
-      const errorMsg = err.response?.data?.detail || (error instanceof Error ? error.message : 'Error closing trade in journal')
-      alert(`Error: ${errorMsg}`)
     } finally {
       setIsClosing(false)
     }
-  }, [selectedTrade, loadTrades, closeOnHyperliquid, currentPrices])
+  }, [selectedTrade, isClosing, loadTrades, closeOnHyperliquid, mode, currentPrices])
 
   const handleTPHit = useCallback(async (tpIndex: number): Promise<void> => {
     if (!selectedTrade) return

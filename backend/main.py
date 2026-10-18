@@ -3,6 +3,7 @@ FastAPI Backend for TradeLab
 Handles all trading journal logic and data persistence
 """
 
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -10,6 +11,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
+
+# TRADELAB_LOG_LEVEL=DEBUG shows order/exchange diagnostics
+logging.basicConfig(
+    level=os.getenv("TRADELAB_LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 
 from routers import analytics, calculations, hyperliquid, mode, portfolio, system, trades, webhook  # noqa: E402
 

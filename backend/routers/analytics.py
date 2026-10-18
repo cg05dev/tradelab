@@ -1,10 +1,12 @@
-import traceback
+import logging
 from typing import Optional
 
 import pandas as pd
 from fastapi import APIRouter
 
 from storage import load_mode, load_trades
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
@@ -67,8 +69,7 @@ def get_analytics_metrics(timeframe: str = 'all', mode: Optional[str] = None):
             "loss_count": int(len(losses)),
         }
     except Exception as e:
-        print(f"Error in get_analytics_metrics: {e}")
-        traceback.print_exc()
+        logger.exception(f"Error in get_analytics_metrics: {e}")
         return {"total_pnl": 0, "win_rate": 0, "avg_win": 0, "avg_loss": 0}
 
 @router.get("/pnl-series")
@@ -98,8 +99,7 @@ def get_pnl_series(timeframe: str = 'all', mode: Optional[str] = None):
             for _, row in closed.iterrows()
         ]
     except Exception as e:
-        print(f"Error in get_pnl_series: {e}")
-        traceback.print_exc()
+        logger.exception(f"Error in get_pnl_series: {e}")
         return []
 
 @router.get("/overview")
@@ -159,8 +159,7 @@ def get_analytics_overview(mode: Optional[str] = None):
             "total_pnl": total_pnl
         }
     except Exception as e:
-        print(f"Error in get_analytics_overview: {e}")
-        traceback.print_exc()
+        logger.exception(f"Error in get_analytics_overview: {e}")
         return {
             "total_trades": 0,
             "open_trades": 0,

@@ -1,8 +1,8 @@
 """TradingView webhook: turns alerts into sized trade plans."""
 
 import hmac
+import logging
 import os
-import traceback
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException
@@ -12,6 +12,8 @@ from models import PositionSizeRequest, StopLoss, TakeProfit, TradeData
 from routers.calculations import calculate_position_size
 from routers.trades import add_trade
 from storage import load_portfolio_size, save_portfolio_size
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/webhook", tags=["webhook"])
 
@@ -123,6 +125,5 @@ async def webhook_trade(data: WebhookTrade, x_webhook_secret: Optional[str] = He
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] Webhook trade error: {e}")
-        traceback.print_exc()
+        logger.exception(f"Webhook trade error: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -4,11 +4,14 @@ Paper and live modes keep separate files.
 """
 
 import json
+import logging
 import math
 import os
 from typing import Optional
 
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 BASE_DIR = os.path.dirname(__file__)
@@ -124,7 +127,7 @@ def load_mode():
             json.dump({'mode': DEFAULT_MODE}, f)
         return DEFAULT_MODE
     except Exception as e:
-        print(f"[WARNING] Error loading mode: {e}, defaulting to live")
+        logger.warning(f"Error loading mode: {e}, defaulting to live")
         try:
             with open(MODE_FILE, 'w') as f:
                 json.dump({'mode': DEFAULT_MODE}, f)
@@ -138,7 +141,7 @@ def save_mode(mode):
         with open(MODE_FILE, 'w') as f:
             json.dump({'mode': mode}, f)
     except Exception as e:
-        print(f"[ERROR] Error saving mode: {e}")
+        logger.error(f"Error saving mode: {e}")
 
 def clean_trade_data(df):
     """Clean DataFrame by replacing NaN, inf, -inf with None and converting to dict"""

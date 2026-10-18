@@ -1,7 +1,15 @@
 import type { AxiosError } from 'axios'
 
+// FastAPI sends `detail` as a string, a list of validation errors, or an object
+// such as { error: 'mode_blocked', mode, reason } from the execution guard
+type ErrorDetailObject = {
+  msg?: string
+  message?: string
+  reason?: string
+}
+
 export type ApiErrorResponse = {
-  detail?: string
+  detail?: string | Array<string | ErrorDetailObject> | ErrorDetailObject
   error?: string
   mode?: string
   reason?: string
@@ -17,13 +25,12 @@ export function getErrorMessage(error: unknown, fallback = 'Something went wrong
     if (detail) {
       if (typeof detail === 'string') return detail
       if (Array.isArray(detail)) {
-        return (detail as any[])
-          .map((item: any) => (typeof item === 'string' ? item : item?.msg || item?.message || JSON.stringify(item)))
+        return detail
+          .map(item => (typeof item === 'string' ? item : item?.msg || item?.message || JSON.stringify(item)))
           .join('. ')
       }
       if (typeof detail === 'object') {
-        const d = detail as any
-        return d?.msg || d?.message || JSON.stringify(detail)
+        return detail.reason || detail.msg || detail.message || JSON.stringify(detail)
       }
     }
     // Fallback to reason or error fields

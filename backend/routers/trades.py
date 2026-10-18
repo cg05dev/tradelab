@@ -1,6 +1,6 @@
 import io
 import json
-import traceback
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -18,6 +18,8 @@ from storage import (
     save_trades,
 )
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/trades", tags=["trades"])
 
 
@@ -33,8 +35,7 @@ def get_trades(mode: Optional[str] = None):
         trades_list = clean_trade_data(df)
         return {"trades": trades_list}
     except Exception as e:
-        print(f"Error in get_trades: {e}")
-        traceback.print_exc()
+        logger.exception(f"Error in get_trades: {e}")
         return {"trades": []}
 
 @router.get("/open")
@@ -59,8 +60,7 @@ def get_open_trades(mode: Optional[str] = None):
         
         return {"trades": trades_list}
     except Exception as e:
-        print(f"Error in get_open_trades: {e}")
-        traceback.print_exc()
+        logger.exception(f"Error in get_open_trades: {e}")
         return {"trades": []}
 
 @router.get("/closed")
@@ -126,8 +126,7 @@ def get_closed_trades(asset=None, start=None, end=None, sort=None, page=None, li
 
         return {"trades": trades_list, "count": total_count}
     except Exception as e:
-        print(f"Error in get_closed_trades: {e}")
-        traceback.print_exc()
+        logger.exception(f"Error in get_closed_trades: {e}")
         return {"trades": [], "count": 0}
 
 @router.get("/closed/count")
@@ -139,8 +138,7 @@ def get_closed_trades_count(mode: Optional[str] = None):
             return {"count": 0}
         return {"count": int((df['Status'] == 'Closed').sum())}
     except Exception as e:
-        print(f"Error in get_closed_trades_count: {e}")
-        traceback.print_exc()
+        logger.exception(f"Error in get_closed_trades_count: {e}")
         return {"count": 0}
 
 @router.post("")
