@@ -3,7 +3,10 @@ import axios, { AxiosInstance } from 'axios'
 const DEFAULT_API_BASE_URL = ''
 const API_BASE_URL = import.meta.env.VITE_API_URL || DEFAULT_API_BASE_URL
 
-console.log(`[API] Base URL: ${API_BASE_URL}`)
+// Verbose request/response logging only in `npm run dev`
+const debugLog = import.meta.env.DEV ? console.debug : () => {}
+
+debugLog(`[API] Base URL: ${API_BASE_URL}`)
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
@@ -14,7 +17,7 @@ const api: AxiosInstance = axios.create({
 
 api.interceptors.request.use(
   config => {
-    console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data)
+    debugLog(`[API Request] ${config.method?.toUpperCase()} ${config.url}`, config.data)
     return config
   },
   error => {
@@ -25,7 +28,7 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   response => {
-    console.log(`[API Response] ${response.config.method?.toUpperCase()} ${response.config.url}`, response.status, response.data)
+    debugLog(`[API Response] ${response.config.method?.toUpperCase()} ${response.config.url}`, response.status, response.data)
     return response
   },
   error => {

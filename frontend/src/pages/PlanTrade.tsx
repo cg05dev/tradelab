@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { addTrade } from '../api/trades'
@@ -26,8 +26,6 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
   const [stopLoss, setStopLoss] = useState<number | null>(null)
   const [takeProfits, setTakeProfits] = useState<TakeProfit[]>([])
   const [thesis, setThesis] = useState('')
-  const [currentPrice, setCurrentPrice] = useState<number | null>(null)
-  const [tradeDetails, setTradeDetails] = useState<TradeDetails | null>(null)
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [toast, setToast] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
 
@@ -49,9 +47,8 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     retry: 1,
   })
 
-  useEffect(() => {
-    if (priceQuery.data != null) setCurrentPrice(priceQuery.data)
-  }, [priceQuery.data])
+  // Keyed by asset, so switching assets never shows the previous asset's price
+  const currentPrice = priceQuery.data ?? null
 
   useEffect(() => {
     if (!toast) return
@@ -59,8 +56,8 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     return () => window.clearTimeout(timeout)
   }, [toast])
 
-  useEffect(() => {
-    if (!currentPrice) return
+  const tradeDetails = useMemo<TradeDetails | null>(() => {
+    if (!currentPrice) return null
 
     const portfolioSize = portfolioQuery.data?.portfolio_size || 2000
     const riskAmount = portfolioSize * riskPercentage / 100
@@ -87,7 +84,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
       }))
     const estimatedProfit = tpProfits.reduce((sum, tp) => sum + tp.profit, 0)
 
-    setTradeDetails({
+    return {
       liquidationPrice,
       positionSize,
       positionSizeDollars,
@@ -99,7 +96,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
       positionValue: positionSizeDollars,
       currentPrice,
       isStopLossValid,
-    })
+    }
   }, [currentPrice, direction, leverage, portfolioQuery.data?.portfolio_size, riskPercentage, takeProfits, stopLoss])
 
   const executeMutation = useMutation({

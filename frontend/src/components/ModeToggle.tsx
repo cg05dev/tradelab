@@ -1,4 +1,4 @@
-import { useMode, type UITradingMode } from '../contexts/ModeContext'
+import { useMode } from '../contexts/ModeContext'
 
 export default function ModeToggle() {
   const { mode, toggleMode, isLoading } = useMode()

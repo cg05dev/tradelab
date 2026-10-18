@@ -56,7 +56,7 @@ export default function AnalyticsPage() {
   })
 
   const metrics = metricsQuery.data
-  const trades = (tradesQuery.data?.trades ?? []) as Trade[]
+  const trades = useMemo(() => (tradesQuery.data?.trades ?? []) as Trade[], [tradesQuery.data])
   const totalCount = tradesQuery.data?.count ?? 0
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
   const firstVisibleTrade = totalCount === 0 ? 0 : (page - 1) * pageSize + 1
@@ -69,12 +69,14 @@ export default function AnalyticsPage() {
   }, [trades])
 
   const chartData = useMemo(() => {
+    const points = []
     let peak = 0
-    return (seriesQuery.data ?? []).map((point) => {
+    for (const point of seriesQuery.data ?? []) {
       const cumulative = point.cumulative_pnl ?? 0
       peak = Math.max(peak, cumulative)
-      return { ...point, drawdown: cumulative - peak }
-    })
+      points.push({ ...point, drawdown: cumulative - peak })
+    }
+    return points
   }, [seriesQuery.data])
   const finalPnl = chartData[chartData.length - 1]?.cumulative_pnl ?? 0
   const chartColor = chartMode === 'drawdown' ? '#f97316' : finalPnl >= 0 ? '#22c55e' : '#ef4444'
