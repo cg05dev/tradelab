@@ -3,12 +3,15 @@ Hyperliquid Exchange Client
 Provides interface for real-time price data, position monitoring, and trade execution
 """
 
+import logging
 import os
 import json
 import requests
 from typing import Optional, Dict, List
 from datetime import datetime
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -48,13 +51,13 @@ class HyperliquidClient:
             return
         
         if not HYPERLIQUID_AVAILABLE:
-            print("[ERROR] Hyperliquid SDK not installed. Run: pip install hyperliquid-python-sdk")
+            logger.error("Hyperliquid SDK not installed. Run: pip install hyperliquid-python-sdk")
             self._enabled = False
             self._initialized = True
             return
         
         if not self._enabled:
-            print("[INFO] Hyperliquid integration disabled (set HYPERLIQUID_ENABLED=true in .env)")
+            logger.info("Hyperliquid integration disabled (set HYPERLIQUID_ENABLED=true in .env)")
             self._initialized = True
             return
         
@@ -64,15 +67,15 @@ class HyperliquidClient:
             
             # Validate that we got a proper URL, not something else
             if not base_url or not isinstance(base_url, str) or not base_url.startswith('http'):
-                print(f"[ERROR] Invalid Hyperliquid API URL: {base_url}")
+                logger.error(f"Invalid Hyperliquid API URL: {base_url}")
                 self._enabled = False
                 self._initialized = True
                 return
             
             # Initialize Info client (read-only, no auth needed)
-            print(f"Connecting to Hyperliquid {'Testnet' if self._use_testnet else 'Mainnet'}...")
+            logger.info(f"Connecting to Hyperliquid {'Testnet' if self._use_testnet else 'Mainnet'}...")
             self._info_client = Info(base_url, skip_ws=True)
-            print("[OK] Info client connected")
+            logger.info("Info client connected")
             
             # Initialize Exchange client only if credentials are provided
             if self._wallet_address and self._private_key:
@@ -81,24 +84,24 @@ class HyperliquidClient:
                 self._signer_address = wallet.address  # Address derived from private key (for signing)
                 # self._wallet_address remains the ENV value (main account to trade on behalf of)
                 
-                print(f"[DEBUG] Main wallet address (from ENV): {self._wallet_address}")
-                print(f"[DEBUG] Signer address (derived from key): {self._signer_address}")
-                print(f"[DEBUG] Addresses match: {self._wallet_address.lower() == self._signer_address.lower()}")
+                logger.debug(f"Main wallet address (from ENV): {self._wallet_address}")
+                logger.debug(f"Signer address (derived from key): {self._signer_address}")
+                logger.debug(f"Addresses match: {self._wallet_address.lower() == self._signer_address.lower()}")
                 
                 self._exchange_client = Exchange(
                     wallet,  # First param: wallet object (for signing)
                     base_url,  # Second param: base URL
                     account_address=self._wallet_address  # Keyword arg: main account to trade on behalf of
                 )
-                print(f"[OK] Exchange client connected for {self._wallet_address[:10]}...")
-                print(f"[INFO] Trading on behalf of: {self._wallet_address}")
+                logger.info(f"Exchange client connected for {self._wallet_address[:10]}...")
+                logger.info(f"Trading on behalf of: {self._wallet_address}")
             else:
-                print("[INFO] Info client only (no trading credentials provided)")
+                logger.info("Info client only (no trading credentials provided)")
             
             self._initialized = True
                 
         except Exception as e:
-            print(f"[ERROR] Error connecting to Hyperliquid: {e}")
+            logger.error(f"Error connecting to Hyperliquid: {e}")
             self._enabled = False
             self._info_client = None
             self._exchange_client = None
@@ -139,13 +142,13 @@ class HyperliquidClient:
             all_mids = response.json()
 
             if not isinstance(all_mids, dict):
-                print(f"[ERROR] Unexpected response format from Hyperliquid API: {type(all_mids)}")
+                logger.error(f"Unexpected response format from Hyperliquid API: {type(all_mids)}")
                 return None
 
             price = all_mids.get(coin.upper())
             return float(price) if price is not None else None
         except Exception as e:
-            print(f"[ERROR] Error getting price for {coin}: {e}")
+            logger.error(f"Error getting price for {coin}: {e}")
             return None
     
     def get_asset_metadata(self) -> Optional[Dict]:
@@ -185,7 +188,7 @@ class HyperliquidClient:
             
             return asset_data
         except Exception as e:
-            print(f"[ERROR] Error getting asset metadata: {e}")
+            logger.error(f"Error getting asset metadata: {e}")
             return None
     
     def get_positions(self, coin: Optional[str] = None) -> List[Dict]:
@@ -193,37 +196,37 @@ class HyperliquidClient:
         self._ensure_initialized()
         
         if not self._info_client:
-            print("[ERROR] get_positions: Info client not initialized")
+            logger.error("get_positions: Info client not initialized")
             return []
         
         if not self._wallet_address:
-            print("[ERROR] get_positions: Wallet address not set")
+            logger.error("get_positions: Wallet address not set")
             return []
         
         try:
-            print(f"[DEBUG] Fetching user_state for wallet: {self._wallet_address}")
+            logger.debug(f"Fetching user_state for wallet: {self._wallet_address}")
             user_state = self._info_client.user_state(self._wallet_address)
-            print(f"[DEBUG] user_state response: {user_state}")
+            logger.debug(f"user_state response: {user_state}")
             
             if not user_state:
-                print("[ERROR] user_state is None")
+                logger.error("user_state is None")
                 return []
             
             if 'assetPositions' not in user_state:
-                print(f"[ERROR] 'assetPositions' not in user_state. Keys: {user_state.keys()}")
+                logger.error(f"'assetPositions' not in user_state. Keys: {user_state.keys()}")
                 return []
             
             asset_positions = user_state.get('assetPositions', [])
-            print(f"[DEBUG] assetPositions count: {len(asset_positions)}")
-            print(f"[DEBUG] assetPositions: {asset_positions}")
+            logger.debug(f"assetPositions count: {len(asset_positions)}")
+            logger.debug(f"assetPositions: {asset_positions}")
             
             positions = []
             for pos_data in asset_positions:
                 position = pos_data.get('position', {})
-                print(f"[DEBUG] Processing position: {position}")
+                logger.debug(f"Processing position: {position}")
                 
                 if coin and position.get('coin') != coin:
-                    print(f"[DEBUG] Skipping position, coin mismatch: {position.get('coin')} != {coin}")
+                    logger.debug(f"Skipping position, coin mismatch: {position.get('coin')} != {coin}")
                     continue
                 
                 positions.append({
@@ -237,13 +240,11 @@ class HyperliquidClient:
                     'max_leverage': float(position.get('maxLeverage', 0))
                 })
             
-            print(f"[DEBUG] Returning {len(positions)} positions")
+            logger.debug(f"Returning {len(positions)} positions")
             return positions
             
         except Exception as e:
-            print(f"[ERROR] Error getting positions: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception(f"Error getting positions: {e}")
             return []
     
     def place_stop_order(self, coin: str, is_buy: bool, size: float, trigger_price: float, is_long_position: bool) -> Dict:
@@ -295,8 +296,8 @@ class HyperliquidClient:
             # Must include isMarket field
             trigger_order_type = {"trigger": {"triggerPx": trigger_price, "tpsl": "sl", "isMarket": True}}
             
-            print(f"[DEBUG] trigger_order_type: {trigger_order_type}")
-            print(f"[DEBUG] Order parameters: coin={coin}, is_buy={not is_long_position}, size={size}, trigger_price={trigger_price}")
+            logger.debug(f"trigger_order_type: {trigger_order_type}")
+            logger.debug(f"Order parameters: coin={coin}, is_buy={not is_long_position}, size={size}, trigger_price={trigger_price}")
             
             # For trigger orders, we need a valid limit price (not 0)
             # Use the trigger price as the limit price
@@ -312,13 +313,11 @@ class HyperliquidClient:
                 cloid=None
             )
             
-            print(f"[DEBUG] Order result: {result}")
+            logger.debug(f"Order result: {result}")
             return result
             
         except Exception as e:
-            print(f"[ERROR] Error placing stop order: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception(f"Error placing stop order: {e}")
             return {"status": "error", "message": str(e)}
 
     def market_close(self, coin: str) -> Dict:
@@ -332,9 +331,7 @@ class HyperliquidClient:
             result = self._exchange_client.market_close(coin)
             return result
         except Exception as e:
-            print(f"[ERROR] Error closing position for {coin}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception(f"Error closing position for {coin}: {e}")
             return {"status": "error", "message": str(e)}
 
 
