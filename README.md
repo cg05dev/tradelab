@@ -124,11 +124,16 @@ pytest -v
 ```
 tradelab/
 ├── backend/
-│   ├── main.py                  # FastAPI backend server
+│   ├── main.py                  # App setup: CORS and router registration
+│   ├── routers/                 # One APIRouter per area (trades, analytics, calculations,
+│   │                            #   portfolio, mode, hyperliquid, webhook, system)
+│   ├── storage.py               # CSV/JSON persistence, per-mode data files
+│   ├── models.py                # Shared Pydantic request models
 │   ├── trade_calculator.py      # Position sizing and risk/reward calculations
 │   ├── hyperliquid_client.py    # Hyperliquid DEX API client
-│   ├── tests/                   # Pytest test suite
+│   ├── tests/                   # Pytest suite (calculator, API, Hyperliquid client)
 │   ├── requirements.txt         # Python dependencies
+│   ├── requirements-dev.txt     # Test dependencies
 │   ├── trades.csv               # Trade data storage (Live mode, generated at runtime)
 │   ├── trades_paper.csv         # Trade data storage (Paper mode, generated at runtime)
 │   ├── portfolio_config.json    # Portfolio size (Live mode, generated at runtime)

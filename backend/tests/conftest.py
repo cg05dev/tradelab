@@ -4,13 +4,15 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+import storage
+from routers import hyperliquid
 
 
 @pytest.fixture
 def data_dir(tmp_path, monkeypatch):
     """Point every data file at a temp dir so tests never touch real journals."""
-    monkeypatch.setattr(main, "MODE_FILE", str(tmp_path / "mode_config.json"))
-    monkeypatch.setattr(main, "DATA_FILES", {
+    monkeypatch.setattr(storage, "MODE_FILE", str(tmp_path / "mode_config.json"))
+    monkeypatch.setattr(storage, "DATA_FILES", {
         "live": {
             "trades": str(tmp_path / "trades.csv"),
             "portfolio": str(tmp_path / "portfolio_config.json"),
@@ -28,7 +30,7 @@ def hl(monkeypatch):
     """A mock Hyperliquid client, so no test can reach the real exchange."""
     client = Mock()
     client.enabled = True
-    monkeypatch.setattr(main, "hl_client", client)
+    monkeypatch.setattr(hyperliquid, "hl_client", client)
     return client
 
 
