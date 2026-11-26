@@ -14,7 +14,7 @@ A modern, browser-first trading journal application for tracking and analyzing c
 - **Performance Tracking**: Win rate, P&L, profit factor, max drawdown, and win/loss counts
 - **Trade Management**: Track open and closed trades with detailed history
 - **Analytics Dashboard**: Timeframe filtering, equity/drawdown charts, and trade history with filtering, search, sorting, and pagination
-- **Hyperliquid Integration**: Execute trades directly on Hyperliquid DEX, with live prices, positions, and available assets pulled from the public API
+- **Hyperliquid Integration**: Connect your account from the Settings page (browser wallet or address), sync your live portfolio from its balance, and trade through an API wallet that can't withdraw
 - **Paper/Live Mode**: Toggle between paper trading (simulation with separate data) and live trading (real execution)
 - **TradingView Webhook**: `POST /api/webhook/trade` lets TradingView alerts create trade plans automatically (secret-protected)
 - **Browser-First**: Modern React application running entirely in the browser
@@ -52,6 +52,21 @@ A modern, browser-first trading journal application for tracking and analyzing c
   can't distort live performance stats.
 - **Webhook auth that works with TradingView.** TradingView alerts can't set headers, so the shared secret
   travels in the JSON body and is compared in constant time. The endpoint is off until a secret is configured.
+- **Trade through an API wallet, never the main key.** Hyperliquid API wallets can trade but not
+  withdraw. Enabling trading creates one in the backend and has the browser wallet sign its approval
+  (EIP-712), so the main key never leaves the wallet. The backend checks who signed before sending it.
+  A pasted key is checked against Hyperliquid first: it must be an approved API wallet of the connected
+  account, and a main wallet key is refused. Keys live only in the OS keychain.
+- **The live portfolio is the account's value.** Live sizing always uses the connected account's
+  equity on Hyperliquid (including unrealized P&L); there is no typed-in live balance. Standard accounts
+  read it from the perp balance. Unified and portfolio-margin accounts keep USDC in the spot balance,
+  so it's read from there, plus open positions' unrealized P&L (other collateral tokens aren't counted). It's cached for
+  3 seconds and shown as stale if Hyperliquid can't be reached. With no account, or no value fetched
+  yet, live sizing is refused rather than guessed. Only paper mode's balance is entered by hand.
+- **Only this computer can call the API.** The backend refuses requests not addressed to localhost, or
+  carrying proxy headers, which blocks DNS rebinding and keeps a tunnel from exposing anything but the
+  webhook. Requests that change anything must carry an `X-TradeLab-Client` header, which other websites
+  can't add without passing CORS.
 - **SQLite, not a database server.** It's a single-user local app, so an embedded database fits: one file,
   nothing to run, and it's in Python's standard library. Each write is a transaction, and closing a trade
   updates the trade and the portfolio balance together, so a crash can't leave them out of sync. Trades have
@@ -90,16 +105,30 @@ A modern, browser-first trading journal application for tracking and analyzing c
    npm install
    ```
 
-4. **(Optional) Hyperliquid Integration:**
+4. **(Optional) Connect Hyperliquid:**
 
-   Copy the `.env` example below into `backend/.env` and fill in your credentials (see `HYPERLIQUID_ARCHITECTURE.md` for details):
+   Start the app and open **Settings**:
+   - **Connect wallet** (or type your address) on mainnet or testnet. This is read-only: your live
+     portfolio is the account's value from then on. Live mode needs a connected account.
+   - **Enable trading**: your browser wallet signs one free message approving a "TradeLab" API wallet.
+     It can place and cancel orders but can't withdraw. Or paste the key of an API wallet you created
+     on Hyperliquid (More → API). TradeLab refuses your main wallet's key.
+
+   The API wallet key is kept in your system keychain (macOS Keychain, Windows Credential Manager, or
+   Secret Service/KWallet on Linux), never in the database. For extra safety, connect a sub-account
+   that holds only what you want to trade.
+
+   On a machine without a keychain (e.g. a headless server), configure it in `backend/.env` instead,
+   using an **API wallet** key, never your main wallet's:
    ```env
    HYPERLIQUID_ENABLED=true
-   HYPERLIQUID_WALLET_ADDRESS=0x...
-   HYPERLIQUID_PRIVATE_KEY=0x...
+   HYPERLIQUID_WALLET_ADDRESS=0x...   # your account
+   HYPERLIQUID_PRIVATE_KEY=0x...      # the API wallet's key
    HYPERLIQUID_USE_TESTNET=true
    ```
-   Without it, the app runs fully in paper mode. Live order endpoints are refused by the backend
+   When these are set they take precedence, and Settings shows the connection as read-only.
+
+   Without a connection, the app runs in paper mode. Live order endpoints are refused by the backend
    whenever the app is in paper mode.
 
 5. **(Optional) TradingView Webhook and CORS:**
@@ -156,9 +185,10 @@ pytest -v
 ```
 tradelab/
 ├── backend/
-│   ├── main.py                  # App setup: CORS and router registration
+│   ├── main.py                  # App setup: CORS, local-only guard, router registration
 │   ├── routers/                 # One APIRouter per area (trades, analytics, calculations,
-│   │                            #   portfolio, mode, hyperliquid, webhook, system)
+│   │                            #   portfolio, mode, hyperliquid, connection, webhook, system)
+│   ├── connection.py            # Connected account (SQLite) and API wallet key (OS keychain)
 │   ├── storage.py               # SQLite persistence and one-time CSV import
 │   ├── models.py                # Shared Pydantic request models
 │   ├── trade_calculator.py      # Position sizing and risk/reward calculations
@@ -186,8 +216,8 @@ tradelab/
 ## API Endpoints
 
 - `GET /health` - Health check
-- `GET /api/portfolio` - Get portfolio size
-- `PUT /api/portfolio` - Update portfolio size
+- `GET /api/portfolio` - Get portfolio size and its `source`: `manual` (paper), `hyperliquid` (live), or `none` (live, no account connected)
+- `PUT /api/portfolio` - Set the paper balance (live mode is refused: it's the Hyperliquid account value)
 - `POST /api/portfolio/reset` - Reset portfolio to initial size
 - `GET /api/mode` - Get current trading mode (paper/live)
 - `POST /api/mode` - Update trading mode
@@ -210,6 +240,13 @@ tradelab/
 - `POST /api/calculate/profit-loss` - Calculate profit/loss
 - `POST /api/calculate/trade-details` - Full trade breakdown (position sizing, TPs, SLs, liquidation)
 - `POST /api/webhook/trade` - Create a trade plan from a TradingView alert
+- `GET /api/connection` - Connected account, network, and whether trading is enabled
+- `PUT /api/connection` - Connect an account read-only (`{account_address, network}`)
+- `DELETE /api/connection` - Disconnect and delete the API wallet key
+- `POST /api/connection/api-wallet` - Save a pasted API wallet key (checked against Hyperliquid)
+- `DELETE /api/connection/api-wallet` - Delete the API wallet key
+- `POST /api/connection/api-wallet/prepare` - Create an API wallet and return its approval for the browser wallet to sign
+- `POST /api/connection/api-wallet/approve` - Submit the signed approval and store the API wallet key
 - `GET /api/hyperliquid/status` - Hyperliquid integration status
 - `GET /api/hyperliquid/price/{coin}` - Current mid price for a coin
 - `GET /api/hyperliquid/assets` - Available assets and max leverage

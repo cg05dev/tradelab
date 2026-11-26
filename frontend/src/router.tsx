@@ -1,4 +1,4 @@
-import { Outlet, createRootRoute, createRoute, createRouter, Link, Navigate, useRouter } from '@tanstack/react-router'
+import { Outlet, createRootRoute, createRoute, createRouter, Link, Navigate, useRouter, useRouterState } from '@tanstack/react-router'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Layout from './components/Layout'
 import WelcomeScreen from './components/WelcomeScreen'
@@ -7,12 +7,15 @@ import ModeToggle from './components/ModeToggle'
 import { ModeProvider } from './contexts/ModeContext'
 import TradePage from './pages/TradePage'
 import AnalyticsPage from './pages/AnalyticsPage'
+import SettingsPage from './pages/SettingsPage'
 import { getPortfolio } from './api/portfolio'
+import { getConnection } from './api/connection'
 
 function PrimaryNav() {
   const navItems = [
     { to: '/trade', label: 'Trade' },
     { to: '/analytics', label: 'Analytics' },
+    { to: '/settings', label: 'Settings' },
   ] as const
 
   return (
@@ -59,12 +62,17 @@ function RouterLayout() {
 function RootRoute() {
   const queryClient = useQueryClient()
   const router = useRouter()
-  const portfolioQuery = useQuery({
-    queryKey: ['portfolio'],
-    queryFn: async () => (await getPortfolio()).data ?? { portfolio_size: 0 },
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
+  const connectionQuery = useQuery({
+    queryKey: ['connection'],
+    queryFn: async () => (await getConnection()).data,
+  })
+  const paperQuery = useQuery({
+    queryKey: ['portfolio', 'paper'],
+    queryFn: async () => (await getPortfolio('paper')).data,
   })
 
-  if (portfolioQuery.isLoading) {
+  if (connectionQuery.isLoading || paperQuery.isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500" />
@@ -72,7 +80,11 @@ function RootRoute() {
     )
   }
 
-  if ((portfolioQuery.data?.portfolio_size ?? 0) <= 0) {
+  // Until there's something to trade with (a connected account or a paper balance), show the
+  // welcome screen, except on Settings, which is where a new user connects their account
+  const hasAccount = Boolean(connectionQuery.data?.account_address)
+  const hasPaperBalance = (paperQuery.data?.portfolio_size ?? 0) > 0
+  if (!hasAccount && !hasPaperBalance && pathname !== '/settings') {
     return <WelcomeScreen onComplete={async () => {
       await queryClient.invalidateQueries({ queryKey: ['portfolio'] })
       router.navigate({ to: '/trade' })
@@ -105,13 +117,14 @@ const layoutRoute = createRoute({ getParentRoute: () => rootRoute, id: 'layout',
 const indexRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/', component: RedirectLegacyRoute })
 const tradeRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/trade', component: TradePage })
 const analyticsRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/analytics', component: AnalyticsPage })
+const settingsRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/settings', component: SettingsPage })
 const plannerRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/planner', component: RedirectLegacyRoute })
 const openTradesRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/open-trades', component: RedirectLegacyRoute })
 const historyRoute = createRoute({ getParentRoute: () => layoutRoute, path: '/history', component: RedirectLegacyRoute })
 const notFoundRoute = createRoute({ getParentRoute: () => rootRoute, path: '*', component: NotFoundRoute })
 
 const routeTree = rootRoute.addChildren([
-  layoutRoute.addChildren([indexRoute, tradeRoute, analyticsRoute, plannerRoute, openTradesRoute, historyRoute]),
+  layoutRoute.addChildren([indexRoute, tradeRoute, analyticsRoute, settingsRoute, plannerRoute, openTradesRoute, historyRoute]),
   notFoundRoute,
 ])
 

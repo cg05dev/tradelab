@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { useQueryClient } from '@tanstack/react-query'
 import { getMode, setMode as setModeApi } from '../api/hyperliquid'
 
-const MODE_STORAGE_KEY = 'tradelab-mode'
+export const MODE_STORAGE_KEY = 'tradelab-mode'
 export type UITradingMode = 'paper' | 'live'
 type BackendMode = 'planning' | 'live'
 

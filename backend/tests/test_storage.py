@@ -28,7 +28,7 @@ class TestLegacyImport:
         assert btc["TP_Hit"]
         assert not df.iloc[1]["TP_Hit"]
         assert json.loads(btc["TPs"]) == [{"price": 110, "allocation": 1.0}]
-        assert storage.load_portfolio_size("live") == pytest.approx(1234.5)
+        assert storage.load_portfolio_size("live") == 0  # live balance comes from Hyperliquid now
         assert storage.load_mode() == "paper"
         assert storage.load_trades("paper").empty
 
@@ -68,6 +68,21 @@ class TestTransactions:
 
         assert storage.update_trade(trade_id, {"Status": "Closed"}, "paper", portfolio_delta=-250) == 750
 
+    def test_live_trades_never_store_a_balance(self, data_dir):
+        trade_id = storage.insert_trade({"Asset": "BTC", "Status": "Open"}, "live")
+
+        assert storage.update_trade(trade_id, {"Status": "Closed"}, "live", portfolio_delta=500) is None
+        assert storage.load_portfolio_size("live") == 0
+
+    def test_removes_a_previously_typed_live_balance(self, data_dir):
+        import sqlite3
+        storage.load_trades("live")  # create the database
+        with sqlite3.connect(storage.DB_FILE) as conn:
+            conn.execute("INSERT INTO portfolio (mode, size) VALUES ('live', 500)")
+            conn.execute("DELETE FROM settings WHERE key = 'live_portfolio_removed'")
+
+        assert storage.load_portfolio_size("live") == 0
+
     def test_trades_are_scoped_to_their_mode(self, data_dir):
         trade_id = storage.insert_trade({"Asset": "BTC", "Status": "Open"}, "paper")
 
@@ -79,7 +94,7 @@ class TestTransactions:
 
 class TestApiWithStableIds:
     def test_cannot_close_a_paper_trade_from_live_mode(self, client):
-        client.put("/api/portfolio?mode=live", json={"portfolio_size": 1_000})
+        client.put("/api/portfolio?mode=paper", json={"portfolio_size": 1_000})
         trade_id = client.post("/api/trades?mode=paper", json={
             "asset": "BTC", "direction": "long", "entry_price": 100, "stop_loss": 95,
             "position_size": 2_000, "take_profits": [], "stop_losses": [],
@@ -88,7 +103,7 @@ class TestApiWithStableIds:
         response = client.post("/api/trades/close?mode=live", json={"trade_index": trade_id, "exit_price": 110})
 
         assert response.status_code == 400
-        assert client.get("/api/portfolio?mode=live").json()["portfolio_size"] == 1_000
+        assert client.get("/api/portfolio?mode=paper").json()["portfolio_size"] == 1_000
 
     def test_ids_survive_deleting_earlier_trades(self, client):
         def add(asset):

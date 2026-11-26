@@ -4,7 +4,8 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 from models import PositionSizeRequest, StopLoss, TakeProfit
-from storage import load_mode, load_portfolio_size
+from routers.portfolio import portfolio_size_for
+from storage import load_mode
 from trade_calculator import trade_calc
 
 router = APIRouter(prefix="/api/calculate", tags=["calculations"])
@@ -16,7 +17,7 @@ RISK_PCT = 0.02
 def calculate_position_size(request: PositionSizeRequest, mode: Optional[str] = None):
     """Calculate position size based on risk (matching original logic)"""
     current_mode = mode or load_mode()
-    portfolio_size = load_portfolio_size(current_mode)
+    portfolio_size = portfolio_size_for(current_mode)
     risk_pct = request.risk_percentage / 100 if request.risk_percentage else RISK_PCT
     risk_amount = portfolio_size * risk_pct
     

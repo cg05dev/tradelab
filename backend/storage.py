@@ -119,6 +119,11 @@ def _ensure_schema(conn):
         with conn:
             _import_legacy_files(conn)
             conn.execute("INSERT INTO settings (key, value) VALUES ('legacy_import_done', '1')")
+    # The live portfolio used to be typed in; it's now always the Hyperliquid account value
+    if not conn.execute("SELECT 1 FROM settings WHERE key = 'live_portfolio_removed'").fetchone():
+        with conn:
+            conn.execute("DELETE FROM portfolio WHERE mode = 'live'")
+            conn.execute("INSERT INTO settings (key, value) VALUES ('live_portfolio_removed', '1')")
 
 
 def _import_legacy_files(conn):
@@ -129,7 +134,7 @@ def _import_legacy_files(conn):
             df = pd.read_csv(files['trades'], dtype={col: object for col in TEXT_COLUMNS})
             _insert_rows(conn, df, mode)
             logger.info(f"Imported {len(df)} {mode} trades from {files['trades']}")
-        if os.path.exists(files['portfolio']):
+        if mode == 'paper' and os.path.exists(files['portfolio']):
             with open(files['portfolio']) as f:
                 size = json.load(f).get('portfolio_size', 0)
             conn.execute("INSERT OR REPLACE INTO portfolio (mode, size) VALUES (?, ?)", (mode, float(size or 0)))
@@ -198,10 +203,11 @@ def insert_trade(trade: Dict, mode: Optional[str] = None) -> int:
         return conn.execute("SELECT last_insert_rowid()").fetchone()[0]
 
 
-def update_trade(trade_id: int, fields: Dict, mode: Optional[str] = None, portfolio_delta: float = 0.0) -> float:
+def update_trade(trade_id: int, fields: Dict, mode: Optional[str] = None, portfolio_delta: float = 0.0) -> Optional[float]:
     """
-    Update a trade's fields and add `portfolio_delta` to the mode's portfolio size in one
-    transaction. Returns the new portfolio size.
+    Update a trade's fields and, in paper mode, add `portfolio_delta` to the paper balance in one
+    transaction. Returns the new paper balance; None in live mode, whose balance is the
+    Hyperliquid account value and isn't stored.
     """
     current_mode = _resolve_mode(mode)
     assignments = ', '.join(f"{SQL_COLUMNS[col]} = ?" for col in fields)
@@ -213,6 +219,8 @@ def update_trade(trade_id: int, fields: Dict, mode: Optional[str] = None, portfo
         ).rowcount
         if not updated:
             raise KeyError(trade_id)
+        if current_mode != 'paper':
+            return None
         if portfolio_delta:
             conn.execute(
                 "INSERT INTO portfolio (mode, size) VALUES (?, ?) "
@@ -285,6 +293,22 @@ def save_mode(mode):
     """Save trading mode"""
     with _connect() as conn:
         conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES ('mode', ?)", (mode,))
+
+
+def get_setting(key: str) -> Optional[str]:
+    with _connect() as conn:
+        row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    return row[0] if row else None
+
+
+def set_settings(values: Dict[str, Optional[str]]):
+    """Write several settings in one transaction; a None value deletes that key."""
+    with _connect() as conn:
+        for key, value in values.items():
+            if value is None:
+                conn.execute("DELETE FROM settings WHERE key = ?", (key,))
+            else:
+                conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
 
 
 def clean_trade_data(df):

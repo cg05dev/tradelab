@@ -5,6 +5,7 @@ import { addTrade } from '../api/trades'
 import { getPortfolio } from '../api/portfolio'
 import { getHyperliquidPrice, placeHyperliquidOrder, getHyperliquidAssets } from '../api/hyperliquid'
 import { getErrorMessage } from '../api/error'
+import { getConnection } from '../api/connection'
 import { useMode, type UITradingMode } from '../contexts/ModeContext'
 import type { HyperliquidAsset, TakeProfit, TradeDetails, HyperliquidOrderRequest } from '../types'
 
@@ -41,6 +42,11 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     queryFn: async () => (await getPortfolio(mode)).data,
     refetchInterval: 1000,
   })
+  const connectionQuery = useQuery({
+    queryKey: ['connection'],
+    queryFn: async () => (await getConnection()).data,
+    enabled: mode === 'live',
+  })
   const assetsQuery = useQuery<HyperliquidAsset[]>({
     queryKey: ['hyperliquid-assets'],
     queryFn: async () => (await getHyperliquidAssets()).data?.assets || [],
@@ -66,7 +72,8 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
   const tradeDetails = useMemo<TradeDetails | null>(() => {
     if (!currentPrice) return null
 
-    const portfolioSize = portfolioQuery.data?.portfolio_size || 2000
+    // No made-up default: with no balance, nothing is sized (and live orders are blocked below)
+    const portfolioSize = portfolioQuery.data?.portfolio_size ?? 0
     const riskAmount = portfolioSize * riskPercentage / 100
     const liquidationPrice = direction === 'long'
       ? currentPrice * (1 - (1 / leverage) + MAINTENANCE_MARGIN)
@@ -204,8 +211,12 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
   ))
   const riskValid = riskPercentage > 0 && riskPercentage <= MAX_LIVE_RISK_PERCENT
   const liveReadiness = [
+    { valid: Boolean(connectionQuery.data?.trading_enabled), message: 'Enable trading for your Hyperliquid account in Settings before placing a live order.' },
     { valid: Boolean(currentPrice && !priceQuery.isError), message: 'Wait for a current live market price.' },
-    { valid: Boolean(portfolioQuery.data?.portfolio_size), message: 'Wait for your portfolio balance to load.' },
+    {
+      valid: Boolean(portfolioQuery.data?.portfolio_size) && !portfolioQuery.data?.stale,
+      message: portfolioQuery.data?.sync_error ?? 'Wait for your Hyperliquid account value to load.',
+    },
     { valid: hasStop, message: 'Configure a valid stop loss before placing a live order.' },
     { valid: targetsValid, message: 'Add at least one valid profit target before placing a live order.' },
     { valid: allocationsValid, message: 'Set target allocations to a total of 100%.' },
@@ -427,7 +438,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
                     </select>
                   </label>
                 </div>
-                <p className="font-display text-xl font-medium tabular-nums text-white">{formatMoney((portfolioQuery.data?.portfolio_size || 2000) * riskPercentage / 100)}</p>
+                <p className="font-display text-xl font-medium tabular-nums text-white">{formatMoney((portfolioQuery.data?.portfolio_size ?? 0) * riskPercentage / 100)}</p>
               </div>
               <Metric label={hasStop ? 'Estimated loss at stop' : 'Loss at liquidation'} value={formatMoney(tradeDetails.estimatedLoss)} tone="text-red-400" detail={hasStop ? undefined : 'No stop configured'} />
               <Metric label="Estimated profit" value={validTargets.length ? formatMoney(tradeDetails.estimatedProfit) : '—'} tone={validTargets.length ? 'text-green-400' : 'text-white'} detail={validTargets.length ? `${validTargets.length} active target${validTargets.length === 1 ? '' : 's'}` : 'Add a target'} />
