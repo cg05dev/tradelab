@@ -3,8 +3,8 @@
 from unittest.mock import Mock
 
 import pytest
-
 from conftest import make_client
+
 from routers import portfolio
 
 SUMMARY = {"account_value": 12_345.67, "withdrawable": 10_000.0, "margin_used": 2_345.67, "updated_at": "2026-11-26T12:00:00+00:00"}

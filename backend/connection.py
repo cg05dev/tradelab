@@ -143,7 +143,7 @@ def save_agent_key(private_key: str):
         raise ConnectionSettingError(
             f"Couldn't save the key to your system keychain ({e}). TradeLab only stores API wallet keys "
             "in the keychain; on a machine without one, set the HYPERLIQUID_* variables in backend/.env instead."
-        )
+        ) from e
 
 
 def delete_agent_key():

@@ -17,7 +17,7 @@ def update_mode(request: ModeUpdateRequest):
     normalized_mode = _normalize_mode_value(request.mode)
     if not normalized_mode:
         raise HTTPException(
-            status_code=400, 
+            status_code=400,
             detail="Invalid mode '%s'. Valid modes are: paper, live" % request.mode
         )
     save_mode(normalized_mode)

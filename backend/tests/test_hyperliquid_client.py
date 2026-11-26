@@ -244,8 +244,9 @@ class TestFeeRates:
         assert fees.current_rates(HyperliquidClient()) == {"taker": 0.00045, "maker": 0.00015, "stop_slippage": 0.0005, "source": "default"}
 
     def test_falls_back_to_the_base_tier_if_hyperliquid_is_unreachable(self):
-        import fees
         from unittest.mock import Mock
+
+        import fees
         client = Mock(enabled=True)
         client.get_fee_rates.side_effect = RuntimeError("timeout")
         assert fees.current_rates(client)["source"] == "default"

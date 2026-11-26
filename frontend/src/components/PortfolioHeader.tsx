@@ -1,7 +1,7 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { getPortfolio, updatePortfolio } from '../api/portfolio'
-import { getAnalyticsOverview } from '../api/analytics'
+import { getAnalyticsMetrics } from '../api/analytics'
 import { getOpenTrades } from '../api/trades'
 import { getHyperliquidPrice } from '../api/hyperliquid'
 import { getErrorMessage } from '../api/error'
@@ -22,7 +22,7 @@ export default function PortfolioHeader() {
 
   const analyticsQuery = useQuery<AnalyticsOverview>({
     queryKey: ['analytics-overview', mode],
-    queryFn: async () => (await getAnalyticsOverview(mode)).data ?? { total_pnl: 0, win_rate: 0, profit_factor: 0 },
+    queryFn: async () => (await getAnalyticsMetrics('all', mode)).data ?? { total_pnl: 0, win_rate: 0, profit_factor: 0 },
     refetchInterval: 3000, // Refresh analytics every 3 seconds
   })
 

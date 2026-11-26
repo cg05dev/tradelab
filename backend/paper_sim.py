@@ -27,14 +27,13 @@ import requests
 
 import fees
 import storage
-from fill_sync import coin_of, _levels, _opened_ms
+from fill_sync import _levels, _opened_ms, coin_of
+from risk import liquidation_price
 
 logger = logging.getLogger(__name__)
 
 MAINNET_INFO = "https://api.hyperliquid.xyz/info"
 CANDLE_CHECK_MS = 60_000
-# Matches the planner's liquidation estimate (PlanTrade.tsx)
-MAINTENANCE_MARGIN = 0.0125
 CLOSED_FRACTION = 1e-4
 
 _lock = threading.Lock()
@@ -154,11 +153,6 @@ def _open_paper_trades(now_ms: int) -> List[Dict]:
     return [t for t in trades if t["coin"] and t["direction"] in ("long", "short")]
 
 
-def liquidation_price(trade: Dict) -> float:
-    threshold = 1 / trade["leverage"] - MAINTENANCE_MARGIN
-    return trade["entry"] * (1 - threshold) if trade["direction"] == "long" else trade["entry"] * (1 + threshold)
-
-
 def _apply(trade: Dict, price: Dict, rates: Dict) -> bool:
     """Fill the exits one price observation (open/high/low) reaches. Adverse exits are checked first."""
     long = trade["direction"] == "long"
@@ -172,7 +166,7 @@ def _apply(trade: Dict, price: Dict, rates: Dict) -> bool:
         beyond = lambda a, b: a >= b  # noqa: E731
 
     stop = trade["sl"]
-    liquidation = liquidation_price(trade)
+    liquidation = liquidation_price(trade["entry"], trade["leverage"], trade["direction"])
     if stop > 0 and not beyond(stop, liquidation):
         if adverse_reached(stop):
             slipped = stop * (1 - rates["stop_slippage"]) if long else stop * (1 + rates["stop_slippage"])

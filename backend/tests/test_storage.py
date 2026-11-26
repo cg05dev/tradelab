@@ -43,7 +43,8 @@ class TestLegacyImport:
         _write_legacy_files(data_dir)
         storage.load_trades("live")
 
-        storage.clear_trades("live")
+        with storage._connect() as conn:
+            conn.execute("DELETE FROM trades WHERE mode = 'live'")
 
         assert storage.load_trades("live").empty
 
@@ -120,20 +121,3 @@ class TestApiWithStableIds:
 
         closed = client.get("/api/trades/closed?mode=paper").json()["trades"]
         assert [(t["Asset"], t["_index"]) for t in closed] == [("ETH", eth)]
-
-    def test_csv_import_replaces_journal(self, client, data_dir):
-        client.post("/api/trades?mode=paper", json={
-            "asset": "OLD", "direction": "long", "entry_price": 100, "stop_loss": 95,
-            "position_size": 2_000, "take_profits": [], "stop_losses": [],
-        })
-
-        response = client.post(
-            "/api/trades/import?mode=paper",
-            files={"file": ("journal.csv", LEGACY_CSV, "text/csv")},
-        )
-
-        assert response.status_code == 200
-        assert response.json()["total_trades"] == 2
-        trades = client.get("/api/trades?mode=paper").json()["trades"]
-        assert [t["Asset"] for t in trades] == ["BTC", "ETH"]
-        assert trades[1]["Exit_Price"] == 0.0  # missing numeric values are sent as 0

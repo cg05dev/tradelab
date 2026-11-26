@@ -5,11 +5,11 @@ import { addTrade } from '../api/trades'
 import { getPortfolio } from '../api/portfolio'
 import { getHyperliquidPrice, placeHyperliquidOrder, getHyperliquidAssets, getFeeRates, type FeeRates } from '../api/hyperliquid'
 import { getErrorMessage } from '../api/error'
+import { liquidationPrice as estimateLiquidation } from '../trading'
 import { getConnection } from '../api/connection'
 import { useMode, type UITradingMode } from '../contexts/ModeContext'
 import type { HyperliquidAsset, TakeProfit, TradeDetails, HyperliquidOrderRequest } from '../types'
 
-const MAINTENANCE_MARGIN = 0.0125
 // Hyperliquid's base tier, used until the account's own rates load (slightly high, so never undersized risk)
 const DEFAULT_FEES: FeeRates = { taker: 0.00045, maker: 0.00015, stop_slippage: 0.0005, source: 'default' }
 const MAX_LIVE_RISK_PERCENT = 5
@@ -82,9 +82,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     // No made-up default: with no balance, nothing is sized (and live orders are blocked below)
     const portfolioSize = portfolioQuery.data?.portfolio_size ?? 0
     const riskAmount = portfolioSize * riskPercentage / 100
-    const liquidationPrice = direction === 'long'
-      ? currentPrice * (1 - (1 / leverage) + MAINTENANCE_MARGIN)
-      : currentPrice * (1 + (1 / leverage) - MAINTENANCE_MARGIN)
+    const liquidationPrice = estimateLiquidation(currentPrice, leverage, direction)
     const isStopLossValid = Boolean(stopLoss && stopLoss > 0 && (
       direction === 'long'
         ? stopLoss > liquidationPrice && stopLoss < currentPrice

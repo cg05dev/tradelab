@@ -11,7 +11,6 @@ export type PortfolioResponse = {
   sync_error?: string
 }
 export type AnalyticsOverview = { total_pnl?: number; win_rate?: number; avg_win?: number; avg_loss?: number; profit_factor?: number | null }
-export type ApiError = { response?: { data?: { detail?: string } } }
 export type HyperliquidAsset = { symbol: string; max_leverage: number }
 export type TakeProfit = { price: number; allocation: number }
 export type TradeDetails = {
