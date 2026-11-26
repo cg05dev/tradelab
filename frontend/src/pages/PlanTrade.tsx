@@ -474,7 +474,9 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
           <div className="glass-panel w-full max-w-md p-6 shadow-2xl">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-green-400">Live order</p>
+                {connectionQuery.data?.network === 'testnet'
+                  ? <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-300">Testnet order · test funds</p>
+                  : <p className="text-xs font-semibold uppercase tracking-[0.14em] text-green-400">Live order · real funds</p>}
                 <h2 className="mt-1 font-display text-xl font-semibold text-white">Confirm order details</h2>
               </div>
               <button type="button" onClick={() => setShowConfirmation(false)} className="rounded-lg p-2 text-neutral-400 hover:bg-white/5 hover:text-white" aria-label="Close confirmation"><X className="h-4 w-4" /></button>
