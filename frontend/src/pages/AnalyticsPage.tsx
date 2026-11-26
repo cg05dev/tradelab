@@ -241,7 +241,7 @@ function TradeDetails({ trade, returnPercent }: { trade: Trade; returnPercent: n
       <Detail label="Position / margin" value={`${formatCurrency(trade.Position_Size ?? 0)} / ${formatCurrency(trade.Margin ?? 0)}`} />
       <Detail label="Return on margin" value={returnPercent == null ? '—' : `${returnPercent >= 0 ? '+' : ''}${returnPercent.toFixed(2)}%`} />
       <Detail label="Stop loss" value={stops.length ? stops.map((item) => formatCurrency(item.price)).join(', ') : trade.SL ? formatCurrency(trade.SL) : 'Not recorded'} />
-      <Detail label="Profit targets" value={targets.length ? targets.map((item) => `${formatCurrency(item.price)} (${item.allocation}%)`).join(', ') : 'Not recorded'} />
+      <Detail label="Profit targets" value={targets.length ? targets.map((item) => `${formatCurrency(item.price)} (${Math.round(item.allocation * 100)}%)`).join(', ') : 'Not recorded'} />
       <div className="md:col-span-4"><Detail label="Trade notes" value={trade.Thesis || 'No thesis or notes recorded.'} /></div>
     </div>
   )

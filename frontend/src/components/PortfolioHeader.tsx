@@ -25,7 +25,7 @@ export default function PortfolioHeader() {
 
   const openTradesQuery = useQuery<{ trades: Trade[] }>({
     queryKey: ['open-trades-portfolio', mode],
-    queryFn: async () => (await getOpenTrades()).data ?? { trades: [] },
+    queryFn: async () => (await getOpenTrades(mode)).data ?? { trades: [] },
     refetchInterval: 5000, // Refresh trades every 5 seconds
   })
 

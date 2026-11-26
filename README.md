@@ -39,7 +39,15 @@ A modern, browser-first trading journal application for tracking and analyzing c
   fails closed for any other value. Orders are sized from a price the server fetches itself, not the price the
   browser sent.
 - **Market orders as IOC limits.** Hyperliquid has no true market order, so entries are immediate-or-cancel
-  limits with a 0.2% buffer. Take profits are reduce-only resting limits; stop losses are trigger orders.
+  limits with a 0.2% buffer. Take profits are reduce-only resting limits; stop losses are trigger orders,
+  both sized from what actually filled. If any of them is rejected the order still returns (the position is
+  open) but with `status: "partial"` and a warning per missing order, which the UI keeps on screen.
+- **Journal what filled, not what was planned.** A live trade is written to the journal only after the
+  entry fills, at the fill's average price and size, so a rejected order never leaves a phantom open trade.
+- **Allocations are fractions.** In the API and the database a take profit or stop loss allocation is a
+  fraction of the position (`0.5` = half). The API rejects anything outside 0–1, so a percentage sent by
+  mistake fails loudly instead of sizing an order 50× too large. (The webhook's `tpN_alloc` fields are
+  percentages and are converted.)
 - **Paper and live data never mix.** Each mode has its own journal and portfolio files, so simulated trades
   can't distort live performance stats.
 - **Webhook auth that works with TradingView.** TradingView alerts can't set headers, so the shared secret
@@ -208,7 +216,8 @@ tradelab/
 - `GET /api/hyperliquid/positions` - Open positions on Hyperliquid
 - `GET /api/hyperliquid/ws-price` - WebSocket price streaming
 - `POST /api/hyperliquid/order` - Execute order on Hyperliquid
-- `POST /api/hyperliquid/close/{coin}` - Close position on Hyperliquid
+- `POST /api/hyperliquid/close/{coin}` - Close a position on Hyperliquid. Requires a JSON body: `{}` closes
+  all of it, `{"size": 0.02}` closes that many coin units. The coin must match exactly (case-insensitive)
 
 ## Building for Production
 

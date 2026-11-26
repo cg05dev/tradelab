@@ -1,17 +1,25 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { getOpenTrades, closeTrade, partialCloseTrade, stopLossHit } from '../api/trades'
 import { getHyperliquidPrice, closeHyperliquidPosition } from '../api/hyperliquid'
 import { TradeCardSkeleton } from '../components/LoadingSkeleton'
-import { useMode } from '../contexts/ModeContext'
+import { useMode, type UITradingMode } from '../contexts/ModeContext'
 import { getErrorMessage } from '../api/error'
 import type { Trade, ApiError } from '../types'
 
-type TradeWithIndex = Trade & { index: number }
+// `mode` is the journal the trade was loaded from, so actions never apply it to the other mode
+type TradeWithIndex = Trade & { index: number; mode: UITradingMode }
 
 const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
   const { mode } = useMode()
-  const [trades, setTrades] = useState<Trade[]>([])
+  // The trades and the mode they were loaded for are set together. Until a reload for the current
+  // mode lands, nothing is shown, so a paper trade can never be closed against a live position.
+  const [loaded, setLoaded] = useState<{ mode: UITradingMode; trades: Trade[] }>({ mode, trades: [] })
+  const trades = useMemo(() => (loaded.mode === mode ? loaded.trades : []), [loaded, mode])
+  const setTrades = useCallback((update: Trade[] | ((prev: Trade[]) => Trade[])) => {
+    setLoaded((prev) => ({ ...prev, trades: typeof update === 'function' ? update(prev.trades) : update }))
+  }, [])
+  const latestRequest = useRef(0)
   const [selectedTrade, setSelectedTrade] = useState<TradeWithIndex | null>(null)
   const [selectedTradeForDetail, setSelectedTradeForDetail] = useState<Trade | null>(null)
   const [showCloseModal, setShowCloseModal] = useState(false)
@@ -49,14 +57,19 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
   }, [])
 
   const loadTrades = useCallback(async (showLoading = true) => {
+    const requestId = ++latestRequest.current
+    const requestedMode = mode
     try {
       if (showLoading && isInitialMount.current) {
         setLoading(true)
       }
       
-      const res = await getOpenTrades()
+      // Ask for this mode explicitly: right after a toggle the server may not have switched yet
+      const res = await getOpenTrades(requestedMode)
+      // A newer load (e.g. after another mode toggle) superseded this one
+      if (requestId !== latestRequest.current) return
       const tradesData: Trade[] = res.data?.trades || []
-      setTrades(tradesData)
+      setLoaded({ mode: requestedMode, trades: tradesData })
       isInitialMount.current = false
       
       // Fetch current prices for P&L calculation
@@ -65,13 +78,15 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
       }
     } catch (error) {
       console.error('Error loading trades:', error)
-      setTrades([])
+      if (requestId !== latestRequest.current) return
+      setLoaded({ mode: requestedMode, trades: [] })
       isInitialMount.current = false
     } finally {
       setLoading(false)
     }
-  }, [fetchCurrentPrices])
+  }, [fetchCurrentPrices, mode])
 
+  // Reloads whenever the mode changes, since loadTrades depends on it
   useEffect(() => {
     loadTrades()
   }, [loadTrades])
@@ -134,8 +149,13 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
     }
 
     const tradeIndex = selectedTrade.index
+    const tradeMode = selectedTrade.mode
     const asset = selectedTrade.Asset
     if (!asset) return
+    if (tradeMode !== mode) {
+      alert(`This is a ${tradeMode} trade but the app is now in ${mode} mode. Nothing was closed.`)
+      return
+    }
     // Extract coin name from asset (e.g., "BTC" from "BTC-USDC")
     const coin = asset.split('-')[0] ?? ''
 
@@ -143,9 +163,12 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
     try {
       // Close position on Hyperliquid if requested and in live mode
       let fillPrice: number | undefined
-      if (closeOnHyperliquid && mode === 'live') {
+      if (closeOnHyperliquid && tradeMode === 'live') {
         try {
-          const response = await closeHyperliquidPosition(coin)
+          // Close only this trade's share of the position (coin units), not every trade in the coin
+          const entry = Number(selectedTrade.Entry ?? 0)
+          const units = entry > 0 ? Number(selectedTrade.Position_Size ?? 0) / entry : 0
+          const response = await closeHyperliquidPosition(coin, units > 0 ? units : undefined)
           if (response.data?.status !== 'success') {
             throw new Error(response.data?.message || 'Failed to close position')
           }
@@ -180,7 +203,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
       setCloseOnHyperliquid(true)
 
       try {
-        await closeTrade(tradeIndex, fillPrice)
+        await closeTrade(tradeIndex, fillPrice, tradeMode)
         // Immediately remove the trade from local state, then reload from backend for consistency
         setTrades((prev: Trade[]) => prev.filter((trade, idx) => (trade._index ?? idx) !== tradeIndex))
         await loadTrades()
@@ -192,7 +215,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
     } finally {
       setIsClosing(false)
     }
-  }, [selectedTrade, isClosing, loadTrades, closeOnHyperliquid, mode, currentPrices])
+  }, [selectedTrade, isClosing, loadTrades, closeOnHyperliquid, mode, currentPrices, setTrades])
 
   const handleTPHit = useCallback(async (tpIndex: number): Promise<void> => {
     if (!selectedTrade) return
@@ -224,7 +247,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
       setTrades(originalTrades)
       alert(err.response?.data?.detail || 'Error recording TP hit')
     }
-  }, [selectedTrade, trades, loadTrades])
+  }, [selectedTrade, trades, loadTrades, setTrades])
 
   const handleSLHit = useCallback(async (slIndex: number, slPrice: number, slAllocation: number): Promise<void> => {
     if (!selectedTrade) return
@@ -254,7 +277,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
       setTrades(originalTrades)
       alert(err.response?.data?.detail || 'Error recording SL hit')
     }
-  }, [selectedTrade, trades, loadTrades])
+  }, [selectedTrade, trades, loadTrades, setTrades])
 
   if (loading) {
     return (
@@ -391,7 +414,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      setSelectedTrade({ ...trade, index: actualIndex ?? 0 })
+                      setSelectedTrade({ ...trade, index: actualIndex ?? 0, mode: loaded.mode })
                       setCloseOnHyperliquid(true)
                       setShowCloseModal(true)
                     }}
@@ -407,7 +430,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
       )}
 
       {/* Close Trade Modal */}
-      {showCloseModal && selectedTrade && (
+      {showCloseModal && selectedTrade && selectedTrade.mode === mode && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="glass-panel p-5 max-w-md w-full">
             <div className="flex items-center justify-between mb-4">
@@ -437,14 +460,14 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
                     className="w-3.5 h-3.5 rounded border-neutral-600 bg-neutral-800 text-orange-500 focus:ring-orange-500 focus:ring-offset-0"
                   />
                   <label htmlFor="closeOnHL" className="text-neutral-400 cursor-pointer select-none">
-                    Close position on Hyperliquid at market price
+                    Close this trade&apos;s size on Hyperliquid at market price
                   </label>
                 </div>
               )}
               <div className="bg-neutral-800/30 p-3 rounded border border-neutral-700/50">
                 <p className="text-xs text-neutral-400 mb-1">This will:</p>
                 <ul className="text-xs text-neutral-500 space-y-1 list-disc list-inside">
-                  {closeOnHyperliquid && mode === 'live' && <li>Close the position on Hyperliquid at current market price</li>}
+                  {closeOnHyperliquid && mode === 'live' && <li>Close this trade&apos;s size of the {selectedTrade.Asset} position on Hyperliquid at market price</li>}
                   <li>Record the trade in your journal at {closeOnHyperliquid && mode === 'live' ? 'the fill price from Hyperliquid' : 'current market price'}</li>
                   <li>Update your portfolio balance</li>
                 </ul>

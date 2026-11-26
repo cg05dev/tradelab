@@ -320,15 +320,15 @@ class HyperliquidClient:
             logger.exception(f"Error placing stop order: {e}")
             return {"status": "error", "message": str(e)}
 
-    def market_close(self, coin: str) -> Dict:
-        """Close all positions for a given coin via market order"""
+    def market_close(self, coin: str, sz: Optional[float] = None) -> Dict:
+        """Close `sz` units of the position in `coin` via market order, or all of it when `sz` is None"""
         self._ensure_initialized()
 
         if not self._exchange_client or not self._wallet_address or not self._private_key:
             return {"status": "error", "message": "Exchange client not configured"}
 
         try:
-            result = self._exchange_client.market_close(coin)
+            result = self._exchange_client.market_close(coin, sz=sz)
             return result
         except Exception as e:
             logger.exception(f"Error closing position for {coin}: {e}")
