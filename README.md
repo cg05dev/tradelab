@@ -63,6 +63,12 @@ A modern, browser-first trading journal application for tracking and analyzing c
   so it's read from there, plus open positions' unrealized P&L (other collateral tokens aren't counted). It's cached for
   3 seconds and shown as stale if Hyperliquid can't be reached. With no account, or no value fetched
   yet, live sizing is refused rather than guessed. Only paper mode's balance is entered by hand.
+- **The live journal follows the exchange.** Take profits and stops fill on Hyperliquid, often while
+  TradeLab isn't open. Every 15 seconds (`TRADELAB_FILL_SYNC_SECONDS`) the backend reads the account's
+  fills and applies them to the open live trades: partial take profits, and the real exit price, hold
+  time and P&L after fees once a trade is fully closed. Fills of orders TradeLab placed are credited
+  to their own trade. Others (trades journaled earlier, closes on Hyperliquid's site) are matched by
+  coin, direction and time, oldest trade first. Applied fills are recorded, so nothing counts twice.
 - **Only this computer can call the API.** The backend refuses requests not addressed to localhost, or
   carrying proxy headers, which blocks DNS rebinding and keeps a tunnel from exposing anything but the
   webhook. Requests that change anything must carry an `X-TradeLab-Client` header, which other websites
@@ -247,6 +253,7 @@ tradelab/
 - `DELETE /api/connection/api-wallet` - Delete the API wallet key
 - `POST /api/connection/api-wallet/prepare` - Create an API wallet and return its approval for the browser wallet to sign
 - `POST /api/connection/api-wallet/approve` - Submit the signed approval and store the API wallet key
+- `POST /api/hyperliquid/sync` - Apply new Hyperliquid fills to the open live trades now (also runs in the background)
 - `GET /api/hyperliquid/status` - Hyperliquid integration status
 - `GET /api/hyperliquid/price/{coin}` - Current mid price for a coin
 - `GET /api/hyperliquid/assets` - Available assets and max leverage

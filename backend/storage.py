@@ -96,6 +96,29 @@ CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- Hyperliquid orders TradeLab placed for a live trade, so their fills are credited to it (fill_sync.py)
+CREATE TABLE IF NOT EXISTS exchange_orders (
+    oid      INTEGER PRIMARY KEY,
+    trade_id INTEGER NOT NULL REFERENCES trades(id) ON DELETE CASCADE,
+    role     TEXT    NOT NULL CHECK (role IN ('entry', 'take_profit', 'stop_loss', 'close')),
+    level    INTEGER            -- which TP/SL (0-based) for take_profit/stop_loss
+);
+
+-- Hyperliquid fills already applied to a live trade. A fill can be split across trades (same coin),
+-- so the key is (tid, trade_id); `size` is the share applied to this trade.
+CREATE TABLE IF NOT EXISTS exchange_fills (
+    tid      INTEGER NOT NULL,
+    trade_id INTEGER NOT NULL REFERENCES trades(id) ON DELETE CASCADE,
+    kind     TEXT    NOT NULL CHECK (kind IN ('open', 'close')),
+    oid      INTEGER,
+    size     REAL    NOT NULL,  -- coin units
+    price    REAL    NOT NULL,
+    fee      REAL    NOT NULL,  -- USD, this trade's share
+    time_ms  INTEGER NOT NULL,
+    PRIMARY KEY (tid, trade_id)
+);
+CREATE INDEX IF NOT EXISTS idx_exchange_fills_trade ON exchange_fills (trade_id);
 """
 
 

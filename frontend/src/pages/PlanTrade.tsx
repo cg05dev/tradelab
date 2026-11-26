@@ -155,6 +155,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
           entry_price: fill.avg_price,
           position_size: fill.notional,
           margin: fill.margin_used,
+          exchange_orders: fill.order_ids,
         }, 'live')
       } catch (error) {
         throw new LiveOrderJournalError(

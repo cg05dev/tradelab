@@ -56,6 +56,8 @@ export type HyperliquidOrderRequest = { coin: string; is_buy: boolean; margin_am
 export type HyperliquidOrderResponse = {
   status: 'success' | 'partial'
   order_id?: number | null
+  // Every order placed for the trade; sent back when journaling it so its fills are credited to it
+  order_ids?: { entry?: number | null; take_profits: (number | null)[]; stop_losses: (number | null)[] }
   requested_size: number
   filled_size: number
   avg_price: number

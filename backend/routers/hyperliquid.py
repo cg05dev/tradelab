@@ -3,13 +3,15 @@
 import logging
 import time
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from contextlib import nullcontext
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
+import fill_sync
 from models import StopLoss, TakeProfit
-from storage import load_mode
+from storage import load_mode, load_trades
 
 logger = logging.getLogger(__name__)
 
@@ -161,14 +163,23 @@ class HyperliquidOrderRequest(BaseModel):
                 raise ValueError(f"{label} allocations add up to {total:.2%}; they cannot exceed 100% of the position")
         return self
 
-def _place_protection(levels, kind: str, filled_size: float, sz_decimals: int, place) -> List[str]:
+def _order_oid(result: Any) -> Optional[int]:
+    """The oid of an accepted order: resting (TP limits, stop triggers) or filled immediately."""
+    status = _first_status(result)
+    return (status.get("resting") or status.get("filled") or {}).get("oid")
+
+
+def _place_protection(levels, kind: str, filled_size: float, sz_decimals: int, place) -> Tuple[List[str], List[Optional[int]]]:
     """
     Place TP or SL orders sized as fractions of what actually filled. `place(size, price)` sends one
-    order and returns the exchange response. Returns a warning for each level that was not accepted.
+    order and returns the exchange response. Returns a warning for each level that was not accepted,
+    and each level's oid (None if it wasn't placed), in the order of `levels`.
     """
     warnings = []
+    oids: List[Optional[int]] = []
     allocated = 0.0
     for number, level in enumerate(levels, start=1):
+        oids.append(None)
         if level.price <= 0 or level.allocation <= 0:
             continue
         price = round_price(level.price, sz_decimals)
@@ -179,7 +190,10 @@ def _place_protection(levels, kind: str, filled_size: float, sz_decimals: int, p
             error = f"size {size} or price {price} rounds to zero"
         else:
             try:
-                error = _order_error(place(size, price))
+                result = place(size, price)
+                error = _order_error(result)
+                if not error:
+                    oids[-1] = _order_oid(result)
             except Exception as e:
                 logger.exception(f"Failed to place {kind} {number}")
                 error = str(e)
@@ -189,7 +203,7 @@ def _place_protection(levels, kind: str, filled_size: float, sz_decimals: int, p
                 message += " That part of the position has no stop on Hyperliquid; set one there manually."
             logger.error(message)
             warnings.append(message)
-    return warnings
+    return warnings, oids
 
 @router.post("/order")
 def place_hyperliquid_order(request: HyperliquidOrderRequest):
@@ -265,25 +279,28 @@ def place_hyperliquid_order(request: HyperliquidOrderRequest):
         )
 
     close_is_buy = not request.is_buy
-    warnings += _place_protection(
+    tp_warnings, tp_oids = _place_protection(
         request.take_profits, "Take profit", filled_size, sz_decimals,
         lambda size, price: exchange.order(
             name=request.coin, is_buy=close_is_buy, sz=size, limit_px=price,
             order_type={"limit": {"tif": "Gtc"}}, reduce_only=True, cloid=None,
         ),
     )
-    warnings += _place_protection(
+    sl_warnings, sl_oids = _place_protection(
         request.stop_losses, "Stop loss", filled_size, sz_decimals,
         lambda size, price: hl_client.place_stop_order(
             coin=request.coin, is_buy=request.is_buy, size=size, trigger_price=price,
             is_long_position=request.is_buy,
         ),
     )
+    warnings += tp_warnings + sl_warnings
 
     notional = filled_size * avg_price
     return {
         "status": "partial" if warnings else "success",
         "order_id": filled.get("oid"),
+        # Pass these when journaling the trade, so its TP/SL fills are credited to it
+        "order_ids": {"entry": filled.get("oid"), "take_profits": tp_oids, "stop_losses": sl_oids},
         "requested_size": position_size_units,
         "filled_size": filled_size,
         "avg_price": avg_price,
@@ -314,6 +331,21 @@ class ClosePositionRequest(BaseModel):
     # Coin units to close (one journal trade's share); omit to close the whole position.
     # More than the position holds closes all of it.
     size: Optional[float] = Field(default=None, gt=0)
+    # The live journal trade being closed: its close fills are credited to it and its journal
+    # entry is updated from them
+    trade_index: Optional[int] = None
+
+@router.post("/sync")
+def sync_fills():
+    """Apply new Hyperliquid fills to the open live journal trades now (also runs in the background)."""
+    if not hl_client or not hl_client.enabled:
+        raise HTTPException(status_code=503, detail="No Hyperliquid account connected. Connect one in Settings.")
+    try:
+        return fill_sync.sync(hl_client)
+    except Exception as e:
+        logger.exception("Fill sync failed")
+        raise HTTPException(status_code=502, detail=f"Couldn't fetch fills from Hyperliquid: {e}")
+
 
 @router.post("/close/{coin}")
 def close_hyperliquid_position(coin: str, request: ClosePositionRequest):
@@ -337,6 +369,27 @@ def close_hyperliquid_position(coin: str, request: ClosePositionRequest):
     if not hl_client.exchange_client:
         raise HTTPException(status_code=400, detail="Trading isn't enabled for this account. Enable it in Settings.")
 
+    journal_trade = None
+    if request.trade_index is not None:
+        trades = load_trades("live")
+        if request.trade_index not in trades.index or trades.loc[request.trade_index, "Status"] != "Open":
+            raise HTTPException(status_code=400, detail=f"Trade {request.trade_index} isn't an open live trade")
+        journal_trade = request.trade_index
+
+    # For a journal trade, nothing else may sync until this close's fills are claimed for it
+    with fill_sync.lock if journal_trade is not None else nullcontext():
+        return _close_position(coin, request, journal_trade)
+
+
+def _all_oids(result: Any) -> List[int]:
+    try:
+        statuses = result["response"]["data"]["statuses"]
+    except (KeyError, TypeError):
+        return []
+    return [oid for s in statuses if isinstance(s, dict) for oid in [(s.get("filled") or s.get("resting") or {}).get("oid")] if oid]
+
+
+def _close_position(coin: str, request: ClosePositionRequest, journal_trade: Optional[int]):
     try:
         all_positions = hl_client.get_positions(None)
         position = _find_position(all_positions, coin)
@@ -364,6 +417,7 @@ def close_hyperliquid_position(coin: str, request: ClosePositionRequest):
         logger.info(f"Closing {close_size or 'all'} of {actual_coin} position: size={position['size']}, entry=${position.get('entry_price')}")
         result = hl_client.market_close(actual_coin, sz=close_size)
         logger.debug(f"market_close result: {result}")
+        close_oids = _all_oids(result)
 
         # Verify the position actually shrank to the target; if not, send a reduce-only IOC for the shortfall
         time.sleep(CLOSE_CONFIRM_DELAY_SECONDS)
@@ -387,6 +441,7 @@ def close_hyperliquid_position(coin: str, request: ClosePositionRequest):
                         cloid=None
                     )
                     logger.debug(f"Alternative close result: {alt_result}")
+                    close_oids += _all_oids(alt_result)
                     if not _order_error(alt_result):
                         result = alt_result
                 except Exception as alt_error:
@@ -402,11 +457,27 @@ def close_hyperliquid_position(coin: str, request: ClosePositionRequest):
             fill_price = hl_client.get_current_price(actual_coin)
             logger.warning(f"Could not extract fill price from result, using current price: ${fill_price}")
 
+        journal = None
+        if journal_trade is not None:
+            fill_sync.claim_orders(journal_trade, [(oid, "close", None) for oid in close_oids])
+            try:
+                fill_sync.sync(hl_client)
+            except Exception:
+                logger.exception("Could not sync fills after closing; the background sync will retry")
+            row = load_trades("live").loc[journal_trade]
+            def number(value):
+                return float(value) if value is not None and value == value else None  # NaN -> None
+            journal = {"trade_index": journal_trade, "status": str(row["Status"]),
+                       "exit_price": number(row["Exit_Price"]), "pnl": number(row["P&L"])}
+
         return {
             "status": "success",
             "coin": actual_coin,
             "closed_size": float(filled.get("totalSz") or 0) or (close_size or position_size),
             "fill_price": fill_price,
+            # The journal trade after its close fills were applied; status stays "Open" if they
+            # haven't been reported yet (the background sync applies them shortly)
+            "journal": journal,
             "result": result,
             "message": f"Position closed for {actual_coin} at ${fill_price:.2f}" if fill_price
                        else f"Position closed for {actual_coin} (fill price unavailable)",

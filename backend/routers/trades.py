@@ -7,6 +7,7 @@ from typing import Optional
 import pandas as pd
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+import fill_sync
 from models import CloseTradeRequest, PartialCloseRequest, StopLossHitRequest, TradeData
 from storage import (
     JOURNAL_COLUMNS,
@@ -194,6 +195,12 @@ def add_trade(trade_data: TradeData, mode: Optional[str] = None):
         }
         
         trade_id = insert_trade(new_trade, current_mode)
+        orders = trade_data.exchange_orders
+        if orders and current_mode == "live":
+            # So the fills of these orders are credited to this trade when they happen
+            fill_sync.claim_orders(trade_id, [(orders.entry, "entry", None)]
+                                   + [(oid, "take_profit", i) for i, oid in enumerate(orders.take_profits)]
+                                   + [(oid, "stop_loss", i) for i, oid in enumerate(orders.stop_losses)])
 
         return {"message": "Trade added successfully", "trade_index": trade_id}
     except HTTPException:

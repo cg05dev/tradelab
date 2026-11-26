@@ -3,8 +3,10 @@ FastAPI Backend for TradeLab
 Handles all trading journal logic and data persistence
 """
 
+import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
@@ -21,7 +23,34 @@ logging.basicConfig(
 
 from routers import analytics, calculations, connection, hyperliquid, mode, portfolio, system, trades, webhook  # noqa: E402
 
-app = FastAPI(title="TradeLab API")
+import fill_sync  # noqa: E402
+from hyperliquid_client import hl_client  # noqa: E402
+
+logger = logging.getLogger(__name__)
+
+# How often open live trades are checked against Hyperliquid fills (TP/SL hits on the exchange)
+FILL_SYNC_SECONDS = float(os.getenv("TRADELAB_FILL_SYNC_SECONDS", "15"))
+
+
+async def _sync_fills_forever():
+    while True:
+        try:
+            if hl_client.enabled:
+                await asyncio.to_thread(fill_sync.sync, hl_client)
+        except Exception as e:
+            logger.warning(f"Fill sync failed, retrying in {FILL_SYNC_SECONDS:g}s: {e}")
+        await asyncio.sleep(FILL_SYNC_SECONDS)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(_sync_fills_forever()) if FILL_SYNC_SECONDS > 0 else None
+    yield
+    if task:
+        task.cancel()
+
+
+app = FastAPI(title="TradeLab API", lifespan=lifespan)
 
 # CORS middleware for React frontend. The Vite dev server proxies /api, so only
 # origins that call the API directly need to be listed here.

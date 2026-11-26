@@ -10,9 +10,25 @@ export const getHyperliquidPositions = (coin?: string) => {
 export const getHyperliquidWsPrice = () => api.get('/api/hyperliquid/ws-price')
 export const getHyperliquidAssets = () => api.get('/api/hyperliquid/assets')
 export const placeHyperliquidOrder = (orderData: HyperliquidOrderRequest) => api.post<HyperliquidOrderResponse>('/api/hyperliquid/order', orderData)
-// `size` is in coin units; omit it to close the whole position
-export const closeHyperliquidPosition = (coin: string, size?: number) =>
-  api.post(`/api/hyperliquid/close/${coin}`, size ? { size } : {})
+export type ClosePositionResponse = {
+  status: string
+  coin: string
+  closed_size: number
+  fill_price?: number | null
+  message?: string
+  // The journal trade after its close fills were applied (when trade_index was sent)
+  journal?: { trade_index: number; status: string; exit_price: number | null; pnl: number | null } | null
+}
+// `size` is in coin units; omit it to close the whole position. With `tradeIndex`, the backend
+// journals the close from its actual fills.
+export const closeHyperliquidPosition = (coin: string, size?: number, tradeIndex?: number) =>
+  api.post<ClosePositionResponse>(`/api/hyperliquid/close/${coin}`, {
+    ...(size ? { size } : {}),
+    ...(tradeIndex != null ? { trade_index: tradeIndex } : {}),
+  })
+// Apply new Hyperliquid fills (TP/SL hits) to the open live journal trades now
+export const syncHyperliquidFills = () =>
+  api.post<{ synced: boolean; updated: number[]; closed: number[] }>('/api/hyperliquid/sync')
 
 // Mode API
 export interface ModeResponse { mode: 'planning' | 'live' }
