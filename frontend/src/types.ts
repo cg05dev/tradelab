@@ -40,6 +40,19 @@ export type Trade = {
   Date?: string
   'P&L'?: number
 }
+// Allocations in API requests and stored trades are fractions of the position (0-1), not percentages
 export type HyperliquidOrderRequest = { coin: string; is_buy: boolean; margin_amount: number; leverage: number; entry_price: number; take_profits: TakeProfit[]; stop_losses: TakeProfit[]; is_isolated: boolean }
+export type HyperliquidOrderResponse = {
+  status: 'success' | 'partial'
+  order_id?: number | null
+  requested_size: number
+  filled_size: number
+  avg_price: number
+  notional: number
+  margin_used: number
+  leverage: number
+  warnings: string[]
+  message: string
+}
 export type AnalyticsMetrics = { total_pnl?: number; win_rate?: number; avg_win?: number; avg_loss?: number }
 export type PnlSeriesPoint = { date?: string; cumulative_pnl?: number }

@@ -11,10 +11,16 @@ import type { HyperliquidAsset, TakeProfit, TradeDetails, HyperliquidOrderReques
 const MAINTENANCE_MARGIN = 0.0125
 const MAX_LIVE_RISK_PERCENT = 5
 const normalizeMode = (value?: string | null): UITradingMode => value === 'paper' ? 'paper' : 'live'
+// The form edits allocations as percentages; the API and journal store fractions of the position (0-1)
+const toApiLevels = (levels: TakeProfit[]): TakeProfit[] =>
+  levels.map(({ price, allocation }) => ({ price, allocation: allocation / 100 }))
 const formatMoney = (value?: number | null) =>
   value == null
     ? '—'
     : `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+// The order filled but the journal write failed: the user must act, so this one stays on screen
+class LiveOrderJournalError extends Error {}
 
 export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void }) {
   const queryClient = useQueryClient()
@@ -27,7 +33,8 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
   const [takeProfits, setTakeProfits] = useState<TakeProfit[]>([])
   const [thesis, setThesis] = useState('')
   const [showConfirmation, setShowConfirmation] = useState(false)
-  const [toast, setToast] = useState<{ tone: 'success' | 'error'; message: string } | null>(null)
+  // Sticky toasts stay until dismissed: used when a live order needs the user's attention
+  const [toast, setToast] = useState<{ tone: 'success' | 'error'; message: string; sticky?: boolean } | null>(null)
 
   const portfolioQuery = useQuery({
     queryKey: ['portfolio', mode],
@@ -51,7 +58,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
   const currentPrice = priceQuery.data ?? null
 
   useEffect(() => {
-    if (!toast) return
+    if (!toast || toast.sticky) return
     const timeout = window.setTimeout(() => setToast(null), 4000)
     return () => window.clearTimeout(timeout)
   }, [toast])
@@ -100,36 +107,57 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
   }, [currentPrice, direction, leverage, portfolioQuery.data?.portfolio_size, riskPercentage, takeProfits, stopLoss])
 
   const executeMutation = useMutation({
-    mutationFn: async () => {
-      if (!asset || !currentPrice) throw new Error('A live market price is required before placing a trade')
+    mutationFn: async (): Promise<{ warnings: string[] }> => {
+      if (!asset || !currentPrice || !tradeDetails) throw new Error('A live market price is required before placing a trade')
       const currentMode = normalizeMode(mode)
-      await addTrade({
+      const coin = asset.split('-')[0] ?? asset
+      const takeProfitLevels = toApiLevels(takeProfits)
+      const stopLossLevels = stopLoss ? [{ price: stopLoss, allocation: 1 }] : []
+      const journalEntry = {
         asset,
         direction,
         leverage,
-        entry_price: currentPrice,
         stop_loss: stopLoss ?? 0,
-        position_size: tradeDetails?.positionSizeDollars ?? 0,
-        take_profits: takeProfits,
-        stop_losses: stopLoss ? [{ price: stopLoss, allocation: 100 }] : [],
+        take_profits: takeProfitLevels,
+        stop_losses: stopLossLevels,
         thesis,
-      }, currentMode)
-
-      if (currentMode === 'live') {
-        const order: HyperliquidOrderRequest = {
-          coin: asset.split('-')[0] ?? asset,
-          is_buy: direction === 'long',
-          margin_amount: ((portfolioQuery.data?.portfolio_size || 2000) * riskPercentage / 100),
-          leverage,
-          entry_price: currentPrice,
-          take_profits: takeProfits,
-          stop_losses: stopLoss ? [{ price: stopLoss, allocation: 100 }] : [],
-          is_isolated: true,
-        }
-        await placeHyperliquidOrder(order)
       }
+
+      if (currentMode !== 'live') {
+        await addTrade({ ...journalEntry, entry_price: currentPrice, position_size: tradeDetails.positionSizeDollars }, currentMode)
+        return { warnings: [] }
+      }
+
+      // Live: place the order first, then journal what actually filled. A rejected order never
+      // leaves a phantom open trade, and the journal matches the exchange's size and price.
+      const order: HyperliquidOrderRequest = {
+        coin,
+        is_buy: direction === 'long',
+        margin_amount: tradeDetails.marginRequired,
+        leverage,
+        entry_price: currentPrice,
+        take_profits: takeProfitLevels,
+        stop_losses: stopLossLevels,
+        is_isolated: true,
+      }
+      const { data: fill } = await placeHyperliquidOrder(order)
+      const warnings = fill.warnings ?? []
+      try {
+        await addTrade({
+          ...journalEntry,
+          entry_price: fill.avg_price,
+          position_size: fill.notional,
+          margin: fill.margin_used,
+        }, 'live')
+      } catch (error) {
+        throw new LiveOrderJournalError(
+          `Order FILLED on Hyperliquid (${fill.filled_size} ${coin} @ ${formatMoney(fill.avg_price)}), but saving it to the journal failed: ${getErrorMessage(error)}. Record it manually before closing.`
+          + (warnings.length ? ` Also: ${warnings.join(' ')}` : ''),
+        )
+      }
+      return { warnings }
     },
-    onSuccess: async () => {
+    onSuccess: async ({ warnings }) => {
       setShowConfirmation(false)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['closed-trades'] }),
@@ -138,6 +166,10 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
         queryClient.invalidateQueries({ queryKey: ['mode'] }),
       ])
       onTradeAdded?.()
+      if (warnings.length) {
+        setToast({ tone: 'error', sticky: true, message: `Live order filled and journaled, but: ${warnings.join(' ')}` })
+        return
+      }
       setToast({
         tone: 'success',
         message: mode === 'live'
@@ -145,7 +177,14 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
           : 'Paper trade saved to your journal.',
       })
     },
-    onError: (error) => setToast({ tone: 'error', message: getErrorMessage(error, 'Error executing trade') }),
+    onError: (error) => {
+      setShowConfirmation(false)
+      setToast({
+        tone: 'error',
+        sticky: error instanceof LiveOrderJournalError,
+        message: getErrorMessage(error, 'Error executing trade'),
+      })
+    },
   })
 
   const maxLeverage = assetsQuery.data?.find((item) => item.symbol === asset.split('-')[0])?.max_leverage ?? 50
@@ -166,6 +205,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
   const riskValid = riskPercentage > 0 && riskPercentage <= MAX_LIVE_RISK_PERCENT
   const liveReadiness = [
     { valid: Boolean(currentPrice && !priceQuery.isError), message: 'Wait for a current live market price.' },
+    { valid: Boolean(portfolioQuery.data?.portfolio_size), message: 'Wait for your portfolio balance to load.' },
     { valid: hasStop, message: 'Configure a valid stop loss before placing a live order.' },
     { valid: targetsValid, message: 'Add at least one valid profit target before placing a live order.' },
     { valid: allocationsValid, message: 'Set target allocations to a total of 100%.' },

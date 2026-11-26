@@ -1,17 +1,21 @@
 """Request models shared across routers."""
 
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+# Allocations are fractions of the position (0.5 = half), never percentages. The bounds turn a
+# percent sent by mistake (50 instead of 0.5) into a 422 instead of a 50x order or P&L.
+Allocation = Annotated[float, Field(ge=0, le=1, description="Fraction of the position, 0-1")]
 
 
 class TakeProfit(BaseModel):
     price: float
-    allocation: float
+    allocation: Allocation
 
 class StopLoss(BaseModel):
     price: float
-    allocation: float
+    allocation: Allocation
 
 class TradeData(BaseModel):
     asset: str

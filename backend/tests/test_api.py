@@ -85,6 +85,13 @@ class TestTradeLifecycle:
 
         assert response.status_code == 400
 
+    @pytest.mark.parametrize("allocation", [50, 100, -0.1])
+    def test_rejects_allocations_that_are_not_fractions(self, funded, allocation):
+        response = funded.post("/api/trades?mode=paper", json=_trade(take_profits=[{"price": 110, "allocation": allocation}]))
+
+        assert response.status_code == 422
+        assert funded.get("/api/trades?mode=paper").json() == {"trades": []}
+
     def test_close_books_pnl_to_portfolio(self, funded):
         trade_id = _open(funded)
 
@@ -203,7 +210,7 @@ class TestExecutionGuard:
     def test_close_position_blocked_in_paper_mode(self, client, hl):
         client.post("/api/mode", json={"mode": "paper"})
 
-        response = client.post("/api/hyperliquid/close/BTC")
+        response = client.post("/api/hyperliquid/close/BTC", json={})
 
         assert response.status_code == 403
         hl.market_close.assert_not_called()
