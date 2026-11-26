@@ -5,6 +5,7 @@ import { getHyperliquidPrice, closeHyperliquidPosition } from '../api/hyperliqui
 import { TradeCardSkeleton } from '../components/LoadingSkeleton'
 import { useMode, type UITradingMode } from '../contexts/ModeContext'
 import { getErrorMessage } from '../api/error'
+import { formatPrice } from '../format'
 import type { Trade, ApiError } from '../types'
 
 // `mode` is the journal the trade was loaded from, so actions never apply it to the other mode
@@ -207,7 +208,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
         // Immediately remove the trade from local state, then reload from backend for consistency
         setTrades((prev: Trade[]) => prev.filter((trade, idx) => (trade._index ?? idx) !== tradeIndex))
         await loadTrades()
-        alert(`Trade closed successfully at $${fillPrice.toFixed(2)}`)
+        alert(`Trade closed successfully at ${formatPrice(fillPrice)}`)
       } catch (error) {
         console.error('[ERROR] Error closing trade in journal:', error)
         alert(`Error: ${getErrorMessage(error, 'Error closing trade in journal')}`)
@@ -349,13 +350,13 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
                 <div className="flex items-center justify-between text-sm mb-3">
                   <div>
                     <span className="text-neutral-500">Entry: </span>
-                    <span className="text-neutral-300">${trade.Entry?.toFixed(0)}</span>
+                    <span className="text-neutral-300">{formatPrice(trade.Entry)}</span>
                   </div>
                   <div>
                     <span className="text-neutral-500">Current: </span>
                     <span className="text-neutral-300">
                       {trade.Asset && currentPrices[trade.Asset] 
-                        ? `$${currentPrices[trade.Asset].toFixed(0)}`
+                        ? formatPrice(currentPrices[trade.Asset])
                         : '-'
                       }
                     </span>
@@ -370,7 +371,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
                   </div>
                   {liqPrice && (
                     <div className="text-neutral-500 mt-1">
-                      Liq: ${liqPrice.toFixed(0)}
+                      Liq: {formatPrice(liqPrice)}
                     </div>
                   )}
                 </div>
@@ -388,7 +389,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
                               key={tpIdx}
                               className={isHit ? 'text-green-400' : 'text-neutral-400'}
                             >
-                              ${tp.price.toFixed(0)}
+                              {formatPrice(tp.price)}
                               {tpIdx < tps.length - 1 && ','}
                             </span>
                           )
@@ -399,9 +400,9 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
                       <div className="mt-1">
                         <span>SL: </span>
                         <span className="text-neutral-400">
-                          ${sls.length > 0 
-                            ? (sls as Array<{ price: number; allocation: number }>).map(sl => sl.price.toFixed(0)).join(', ')
-                            : (trade.SL ?? 0).toFixed(0)
+                          {sls.length > 0
+                            ? (sls as Array<{ price: number; allocation: number }>).map(sl => formatPrice(sl.price)).join(', ')
+                            : formatPrice(trade.SL)
                           }
                         </span>
                       </div>
@@ -446,7 +447,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
             <div className="space-y-3">
               <div>
                 <p className="text-xs text-neutral-500 mb-0.5">Asset: {selectedTrade.Asset}</p>
-                <p className="text-xs text-neutral-500">Entry: ${selectedTrade.Entry}</p>
+                <p className="text-xs text-neutral-500">Entry: {formatPrice(selectedTrade.Entry)}</p>
                 <p className="text-xs text-neutral-500 mt-1">Direction: {selectedTrade.Direction?.toUpperCase()}</p>
                 <p className="text-xs text-neutral-500">Position Size: ${selectedTrade.Position_Size?.toFixed(2)}</p>
               </div>
@@ -523,7 +524,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
               <div className="space-y-3">
                 <div>
                   <p className="text-xs text-neutral-500 mb-0.5">Asset: {selectedTrade.Asset}</p>
-                  <p className="text-xs text-neutral-500">Entry: ${selectedTrade.Entry}</p>
+                  <p className="text-xs text-neutral-500">Entry: {formatPrice(selectedTrade.Entry)}</p>
                 </div>
                 {availableTPs.length > 0 ? (
                   <div className="space-y-1.5">
@@ -535,7 +536,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
                           onClick={() => handleTPHit(originalIndex)}
                           className="w-full px-3 py-2 bg-black/60 hover:bg-green-500/10 rounded text-left transition-colors border border-neutral-700/60 hover:border-green-500/40"
                         >
-                          <p className="text-white text-sm">TP{originalIndex + 1}: ${tp.price}</p>
+                          <p className="text-white text-sm">TP{originalIndex + 1}: {formatPrice(tp.price)}</p>
                           <p className="text-xs text-neutral-500">Allocation: {tp.allocation * 100}%</p>
                         </button>
                       )
@@ -573,7 +574,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
               <div className="space-y-3">
                 <div>
                   <p className="text-xs text-neutral-500 mb-0.5">Asset: {selectedTrade.Asset}</p>
-                  <p className="text-xs text-neutral-500">Entry: ${selectedTrade.Entry}</p>
+                  <p className="text-xs text-neutral-500">Entry: {formatPrice(selectedTrade.Entry)}</p>
                 </div>
                 {availableSLs.length > 0 ? (
                   <div className="space-y-1.5">
@@ -585,7 +586,7 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
                           onClick={() => handleSLHit(originalIndex, sl.price, sl.allocation)}
                           className="w-full px-3 py-2 bg-black/60 hover:bg-red-500/10 rounded text-left transition-colors border border-neutral-700/60 hover:border-red-500/40"
                         >
-                          <p className="text-white text-sm">SL{originalIndex + 1}: ${sl.price}</p>
+                          <p className="text-white text-sm">SL{originalIndex + 1}: {formatPrice(sl.price)}</p>
                           <p className="text-xs text-neutral-500">Allocation: {sl.allocation * 100}%</p>
                         </button>
                       )
@@ -684,21 +685,21 @@ function TradeDetailModal({ trade, currentPrice, onClose }: TradeDetailModalProp
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
                   <p className="text-xs text-neutral-500 mb-1">Entry Price</p>
-                  <p className="text-white text-sm">${trade.Entry?.toFixed(2)}</p>
+                  <p className="text-white text-sm">{formatPrice(trade.Entry)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-neutral-500 mb-1">Current Price</p>
-                  <p className="text-white text-sm">{currentPrice ? `$${currentPrice.toFixed(2)}` : '-'}</p>
+                  <p className="text-white text-sm">{formatPrice(currentPrice)}</p>
                 </div>
                 {trade.Exit_Price && (
                   <div>
                     <p className="text-xs text-neutral-500 mb-1">Exit Price</p>
-                    <p className="text-white text-sm">${trade.Exit_Price?.toFixed(2)}</p>
+                    <p className="text-white text-sm">{formatPrice(trade.Exit_Price)}</p>
                   </div>
                 )}
                 <div>
                   <p className="text-xs text-neutral-500 mb-1">Stop Loss</p>
-                  <p className="text-white text-sm">${trade.SL?.toFixed(2) || '-'}</p>
+                  <p className="text-white text-sm">{trade.SL ? formatPrice(trade.SL) : '-'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-neutral-500 mb-1">Position Size</p>
@@ -748,7 +749,7 @@ function TradeDetailModal({ trade, currentPrice, onClose }: TradeDetailModalProp
                           )}
                         </div>
                         <p className="text-xs text-neutral-500 mb-0.5">Price</p>
-                        <p className="text-sm mb-1.5">${tp.price?.toFixed(2)}</p>
+                        <p className="text-sm mb-1.5">{formatPrice(tp.price)}</p>
                         <p className="text-xs text-neutral-500 mb-0.5">Allocation</p>
                         <p className="text-xs">{(tp.allocation * 100).toFixed(0)}%</p>
                       </div>
@@ -781,7 +782,7 @@ function TradeDetailModal({ trade, currentPrice, onClose }: TradeDetailModalProp
                           )}
                         </div>
                         <p className="text-xs text-neutral-500 mb-0.5">Price</p>
-                        <p className="text-sm mb-1.5">${sl.price?.toFixed(2)}</p>
+                        <p className="text-sm mb-1.5">{formatPrice(sl.price)}</p>
                         <p className="text-xs text-neutral-500 mb-0.5">Allocation</p>
                         <p className="text-xs">{(sl.allocation * 100).toFixed(0)}%</p>
                       </div>
