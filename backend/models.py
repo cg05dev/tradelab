@@ -17,6 +17,13 @@ class StopLoss(BaseModel):
     price: float
     allocation: Allocation
 
+class ExchangeOrders(BaseModel):
+    """Hyperliquid order ids of a live trade, as the order endpoint returns them. The TP/SL lists
+    line up with the trade's levels; None where a level wasn't placed."""
+    entry: Optional[int] = None
+    take_profits: List[Optional[int]] = []
+    stop_losses: List[Optional[int]] = []
+
 class TradeData(BaseModel):
     asset: str
     direction: str
@@ -28,6 +35,7 @@ class TradeData(BaseModel):
     thesis: Optional[str] = None
     margin: Optional[float] = None
     leverage: Optional[int] = None
+    exchange_orders: Optional[ExchangeOrders] = None  # live trades placed through TradeLab
 
 class PositionSizeRequest(BaseModel):
     entry_price: float

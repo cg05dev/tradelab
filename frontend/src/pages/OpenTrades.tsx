@@ -1,7 +1,7 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
 import { getOpenTrades, closeTrade, partialCloseTrade, stopLossHit } from '../api/trades'
-import { getHyperliquidPrice, closeHyperliquidPosition } from '../api/hyperliquid'
+import { getHyperliquidPrice, closeHyperliquidPosition, syncHyperliquidFills } from '../api/hyperliquid'
 import { TradeCardSkeleton } from '../components/LoadingSkeleton'
 import { useMode, type UITradingMode } from '../contexts/ModeContext'
 import { getErrorMessage } from '../api/error'
@@ -92,6 +92,23 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
     loadTrades()
   }, [loadTrades])
 
+  // Live trades close on Hyperliquid by themselves (TP/SL hits). The backend applies those fills
+  // to the journal; refresh here so closed trades drop off this list.
+  useEffect(() => {
+    if (mode !== 'live') return
+    const refresh = async () => {
+      try {
+        await syncHyperliquidFills()
+      } catch {
+        // No account connected, or Hyperliquid unreachable: the list still reloads
+      }
+      await loadTrades(false)
+    }
+    void refresh()
+    const interval = setInterval(() => void refresh(), 15_000)
+    return () => clearInterval(interval)
+  }, [mode, loadTrades])
+
   // Poll prices every 670ms for whatever trades are currently open
   useEffect(() => {
     if (trades.length === 0) return
@@ -169,13 +186,28 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
           // Close only this trade's share of the position (coin units), not every trade in the coin
           const entry = Number(selectedTrade.Entry ?? 0)
           const units = entry > 0 ? Number(selectedTrade.Position_Size ?? 0) / entry : 0
-          const response = await closeHyperliquidPosition(coin, units > 0 ? units : undefined)
+          const response = await closeHyperliquidPosition(coin, units > 0 ? units : undefined, tradeIndex)
           if (response.data?.status !== 'success') {
             throw new Error(response.data?.message || 'Failed to close position')
           }
 
+          // The backend journals the close from its actual fills (price and fees)
+          const journal = response.data?.journal
+          if (journal) {
+            setShowCloseModal(false)
+            setSelectedTrade(null)
+            setCloseOnHyperliquid(true)
+            await loadTrades()
+            const usd = (value: number) => '$' + value.toLocaleString('en-US', { maximumFractionDigits: 6 })
+            const pnl = journal.pnl ?? 0
+            alert(journal.status === 'Closed'
+              ? `Trade closed at ${usd(journal.exit_price ?? response.data.fill_price ?? 0)}. P&L after fees: ${pnl >= 0 ? '+' : '-'}${usd(Math.abs(pnl))}`
+              : `Position closed on Hyperliquid at ${usd(response.data.fill_price ?? 0)}. The journal updates as soon as Hyperliquid reports the fill.`)
+            return
+          }
+
           // Use the actual fill price from Hyperliquid
-          fillPrice = response.data?.fill_price
+          fillPrice = response.data?.fill_price ?? undefined
           if (!fillPrice || fillPrice <= 0) {
             throw new Error(`Invalid fill price from Hyperliquid: ${fillPrice}`)
           }

@@ -253,6 +253,28 @@ class HyperliquidClient:
         self._account_summary = (time.monotonic(), summary)
         return summary
 
+    FILLS_PAGE_SIZE = 2000  # userFillsByTime returns at most this many per request
+
+    def get_user_fills(self, start_ms: int) -> List[Dict]:
+        """The connected account's fills since `start_ms` (epoch ms), oldest first. Raises if they
+        can't be fetched."""
+        address = self.connection.account_address
+        if not address:
+            raise ValueError("No Hyperliquid account connected")
+        by_tid: Dict[int, Dict] = {}
+        start = int(start_ms)
+        while True:
+            page = self._info({"type": "userFillsByTime", "user": address, "startTime": start, "aggregateByTime": False})
+            if not isinstance(page, list):
+                raise ValueError(f"Unexpected userFillsByTime response: {page}")
+            for fill in page:
+                by_tid[fill["tid"]] = fill
+            latest = max((fill["time"] for fill in page), default=start)
+            if len(page) < self.FILLS_PAGE_SIZE or latest <= start:
+                break
+            start = latest  # fills at `latest` come back again; tid de-duplicates them
+        return sorted(by_tid.values(), key=lambda fill: (fill["time"], fill["tid"]))
+
     def last_account_summary(self) -> Optional[Dict]:
         """The most recent successful get_account_summary(), however old, or None."""
         return self._account_summary[1] if self._account_summary else None
