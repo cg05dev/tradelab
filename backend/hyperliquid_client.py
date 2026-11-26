@@ -104,6 +104,7 @@ class HyperliquidClient:
             self._account_role: Optional[Dict] = None
             self._account_summary: Optional[Tuple[float, Dict]] = None
             self._account_mode_cache: Optional[Tuple[float, str, str]] = None
+            self._fee_cache: Optional[Tuple[float, str, Dict]] = None
 
     @property
     def connection(self) -> "connection.Connection":
@@ -252,6 +253,24 @@ class HyperliquidClient:
         summary["updated_at"] = datetime.now(timezone.utc).isoformat()
         self._account_summary = (time.monotonic(), summary)
         return summary
+
+    FEE_CACHE_SECONDS = 600
+
+    def get_fee_rates(self) -> Dict:
+        """The connected account's perp fee rates as fractions: {"taker", "maker"}. Hyperliquid's
+        userCrossRate/userAddRate already reflect the volume tier; the referral discount comes off
+        them (a real fill was charged exactly 0.045% x (1 - 0.04)). Cached for 10 minutes."""
+        cached = self._fee_cache
+        address = self.connection.account_address
+        if not address:
+            raise ValueError("No Hyperliquid account connected")
+        if cached and cached[1] == address and time.monotonic() - cached[0] < self.FEE_CACHE_SECONDS:
+            return cached[2]
+        fees = self._info({"type": "userFees", "user": address})
+        discount = 1 - float(fees.get("activeReferralDiscount") or 0)
+        rates = {"taker": float(fees["userCrossRate"]) * discount, "maker": float(fees["userAddRate"]) * discount}
+        self._fee_cache = (time.monotonic(), address, rates)
+        return rates
 
     FILLS_PAGE_SIZE = 2000  # userFillsByTime returns at most this many per request
 

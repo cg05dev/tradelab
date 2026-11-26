@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import pytest
 
 
@@ -184,8 +186,22 @@ class TestCalculations:
             "entry_price": 100, "stop_loss": 95, "leverage": 10, "direction": "long", "risk_percentage": 1,
         }).json()
 
-        assert body["position_size_dollars"] == pytest.approx(2_000)
-        assert body["margin_required"] == pytest.approx(200)
+        # $100 risk / (5% stop + two 0.045% taker fees + 0.05% stop slippage)
+        assert body["position_size_dollars"] == pytest.approx(100 / 0.0514)
+        assert body["margin_required"] == pytest.approx(100 / 0.0514 / 10)
+        loss = body["price_loss"] + body["fees_at_stop"] + body["slippage_at_stop"]
+        assert loss == pytest.approx(100)  # the loss at the stop is exactly the risk
+
+    def test_position_size_uses_the_accounts_fee_rates(self, funded, monkeypatch):
+        from routers import calculations
+        monkeypatch.setattr(calculations, "hl_client", Mock(enabled=True, get_fee_rates=Mock(return_value={"taker": 0.000432, "maker": 0.000144})))
+
+        body = funded.post("/api/calculate/position-size?mode=paper", json={
+            "entry_price": 100, "stop_loss": 95, "leverage": 10, "direction": "long", "risk_percentage": 1,
+        }).json()
+
+        assert body["position_size_dollars"] == pytest.approx(100 / (0.05 + 2 * 0.000432 + 0.0005))
+        assert body["fee_rates"]["source"] == "account"
 
     def test_risk_reward(self, client):
         body = client.post("/api/calculate/risk-reward", json={
@@ -241,7 +257,7 @@ class TestWebhook:
         response = client.post("/api/webhook/trade", json={**self.PAYLOAD, "secret": "s3cret"})
 
         assert response.status_code == 200
-        assert response.json()["position_size"] == pytest.approx(2_000)
+        assert response.json()["position_size"] == pytest.approx(100 / 0.0514)  # 5% stop plus costs
         trades = client.get("/api/trades/open?mode=paper").json()["trades"]
         assert len(trades) == 1
         assert "s3cret" not in str(trades)
