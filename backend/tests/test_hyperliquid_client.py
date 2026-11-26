@@ -145,18 +145,20 @@ class TestAccountSummary:
         assert summary["account_mode"] == mode
 
     @patch("hyperliquid_client.requests.post")
-    def test_unified_account_adds_unrealized_pnl_of_open_positions(self, mock_post, keychain):
-        spot = {"balances": [{"coin": "USDC", "token": 0, "total": "100.0", "hold": "20.0", "entryNtl": "0.0"},
+    def test_unified_account_does_not_add_unrealized_pnl_twice(self, mock_post, keychain):
+        """Observed on a real unified account with an open BTC long: the spot USDC total already
+        includes the position's unrealized P&L (4.915609 + -0.034440), so nothing is added to it."""
+        spot = {"balances": [{"coin": "USDC", "token": 0, "total": "4.881169", "hold": "3.676045", "entryNtl": "0.0"},
                              {"coin": "HYPE", "token": 150, "total": "3.0", "hold": "0.0", "entryNtl": "90.0"}],
-                "tokenToAvailableAfterMaintenance": [[0, "75.0"]]}
-        perp = {**EMPTY_PERP_STATE, "assetPositions": [_position("BTC", 12.5), _position("ETH", -2.5)]}
+                "tokenToAvailableAfterMaintenance": [[0, "1.237104"]]}
+        perp = {**EMPTY_PERP_STATE, "assetPositions": [_position("BTC", -0.03444)]}
         mock_post.side_effect = _info_api("unifiedAccount", perp=perp, spot=spot)
 
         summary = _connect(keychain, with_key=False).get_account_summary()
 
-        assert summary["account_value"] == pytest.approx(110.0)  # 100 USDC + 12.5 - 2.5; HYPE isn't counted
-        assert summary["withdrawable"] == pytest.approx(75.0)
-        assert summary["margin_used"] == pytest.approx(20.0)
+        assert summary["account_value"] == pytest.approx(4.881169)  # HYPE isn't counted
+        assert summary["withdrawable"] == pytest.approx(1.237104)
+        assert summary["margin_used"] == pytest.approx(3.676045)
 
     @patch("hyperliquid_client.requests.post")
     def test_unified_account_without_usdc_is_zero(self, mock_post, keychain):

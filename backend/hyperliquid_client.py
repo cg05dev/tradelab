@@ -218,8 +218,9 @@ class HyperliquidClient:
         - Standard accounts keep perp collateral in the perp clearinghouse, whose accountValue is the
           equity.
         - Unified and portfolio-margin accounts keep USDC in the spot balance, which collateralizes perps
-          directly. Equity is that USDC plus the unrealized P&L of open positions, which isn't in the
-          balance until a position closes. Other collateral tokens (portfolio margin) aren't counted.
+          directly. Its total already moves with open positions' unrealized P&L (observed on a live
+          position: total minus unrealizedPnl stayed constant as the price moved), so it is the equity.
+          Other collateral tokens (portfolio margin) aren't counted.
         """
         cached = self._account_summary
         if cached and time.monotonic() - cached[0] < self.ACCOUNT_CACHE_SECONDS:
@@ -228,20 +229,19 @@ class HyperliquidClient:
         if not address:
             raise ValueError("No Hyperliquid account connected")
         mode = self._account_mode(address)
-        perp = self._info({"type": "clearinghouseState", "user": address})
         if mode in self.UNIFIED_MODES:
             spot = self._info({"type": "spotClearinghouseState", "user": address})
             usdc = next((b for b in spot.get("balances", []) if b.get("coin") == "USDC"), None)
             total = float(usdc["total"]) if usdc else 0.0
             hold = float(usdc["hold"]) if usdc else 0.0
             available = dict(spot.get("tokenToAvailableAfterMaintenance") or []).get(0)
-            unrealized = sum(float(p["position"].get("unrealizedPnl") or 0) for p in perp.get("assetPositions", []))
             summary = {
-                "account_value": total + unrealized,
+                "account_value": total,
                 "withdrawable": float(available) if available is not None else max(total - hold, 0.0),
                 "margin_used": hold,
             }
         else:
+            perp = self._info({"type": "clearinghouseState", "user": address})
             margin = perp["marginSummary"]
             summary = {
                 "account_value": float(margin["accountValue"]),
