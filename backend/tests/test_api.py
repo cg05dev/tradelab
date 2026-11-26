@@ -60,6 +60,7 @@ class TestPortfolio:
         assert client.get("/api/portfolio?mode=paper").json()["portfolio_size"] == 0
 
 
+@pytest.mark.usefixtures("no_fees")
 class TestTradeLifecycle:
     def test_add_and_list_open(self, funded):
         response = funded.post("/api/trades?mode=paper", json=_trade())
@@ -150,6 +151,7 @@ class TestTradeLifecycle:
         assert [t["Asset"] for t in trades] == ["ETH"]
 
 
+@pytest.mark.usefixtures("no_fees")
 class TestClosedTradesAndAnalytics:
     @pytest.fixture
     def history(self, funded):

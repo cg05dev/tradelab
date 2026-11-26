@@ -16,7 +16,8 @@ export default function PortfolioHeader() {
   const portfolioQuery = useQuery<PortfolioResponse>({
     queryKey: ['portfolio', mode],
     queryFn: async () => (await getPortfolio(mode)).data ?? { portfolio_size: 0 },
-    refetchInterval: mode === 'live' ? 10_000 : false, // the live balance tracks the Hyperliquid account
+    // The live balance tracks the Hyperliquid account; the paper one moves as simulated exits fill
+    refetchInterval: mode === 'live' ? 10_000 : 5_000,
   })
 
   const analyticsQuery = useQuery<AnalyticsOverview>({
