@@ -119,6 +119,16 @@ CREATE TABLE IF NOT EXISTS exchange_fills (
     PRIMARY KEY (tid, trade_id)
 );
 CREATE INDEX IF NOT EXISTS idx_exchange_fills_trade ON exchange_fills (trade_id);
+
+-- Simulation state of an open paper trade (paper_sim.py): its starting size, what has been filled
+-- of its exits, and how far its price history has been checked
+CREATE TABLE IF NOT EXISTS paper_sim (
+    trade_id    INTEGER PRIMARY KEY REFERENCES trades(id) ON DELETE CASCADE,
+    units_total REAL    NOT NULL,
+    exit_units  REAL    NOT NULL DEFAULT 0,
+    exit_value  REAL    NOT NULL DEFAULT 0,  -- sum of price x units, for the average exit price
+    checked_ms  INTEGER NOT NULL
+);
 """
 
 

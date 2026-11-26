@@ -92,6 +92,7 @@ class TestTransactions:
         assert storage.load_trades("paper").loc[trade_id, "Status"] == "Open"
 
 
+@pytest.mark.usefixtures("no_fees")
 class TestApiWithStableIds:
     def test_cannot_close_a_paper_trade_from_live_mode(self, client):
         client.put("/api/portfolio?mode=paper", json={"portfolio_size": 1_000})

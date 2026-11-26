@@ -7,7 +7,9 @@ from typing import Optional
 import pandas as pd
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+import fees
 import fill_sync
+import paper_sim
 from models import CloseTradeRequest, PartialCloseRequest, StopLossHitRequest, TradeData
 from storage import (
     JOURNAL_COLUMNS,
@@ -22,6 +24,11 @@ from storage import (
 )
 
 logger = logging.getLogger(__name__)
+
+try:
+    from hyperliquid_client import hl_client
+except ImportError:
+    hl_client = None
 
 router = APIRouter(prefix="/api/trades", tags=["trades"])
 
@@ -195,6 +202,9 @@ def add_trade(trade_data: TradeData, mode: Optional[str] = None):
         }
         
         trade_id = insert_trade(new_trade, current_mode)
+        if current_mode == "paper":
+            # Paper trades pay fees like live ones: the entry is a market (taker) order
+            paper_sim.charge_entry(trade_id, new_trade['Position_Size'], fees.current_rates(hl_client))
         orders = trade_data.exchange_orders
         if orders and current_mode == "live":
             # So the fills of these orders are credited to this trade when they happen
@@ -232,7 +242,11 @@ def close_trade(request: CloseTradeRequest, mode: Optional[str] = None):
         pnl = (request.exit_price - entry_price) / entry_price * trade['Position_Size']
     else:
         pnl = (entry_price - request.exit_price) / entry_price * trade['Position_Size']
-    
+    if current_mode == 'paper':
+        # A paper close is a market order: it pays the taker fee, as a live one would
+        units = trade['Position_Size'] / entry_price if entry_price else 0
+        pnl -= fees.current_rates(hl_client)['taker'] * request.exit_price * units
+
     # Calculate hold time
     entry_date = pd.to_datetime(trade['Date'])
     exit_date = datetime.now()
@@ -241,14 +255,16 @@ def close_trade(request: CloseTradeRequest, mode: Optional[str] = None):
     # Update trade
     updates['Status'] = 'Closed'
     updates['Exit_Price'] = request.exit_price
-    updates['P&L'] = pnl
+    # Add to what earlier partial exits (and a paper trade's entry fee) already made
+    prior_pnl = trade['P&L'] if pd.notna(trade['P&L']) else 0.0
+    updates['P&L'] = prior_pnl + pnl
     updates['Hold_Time'] = f"{hold_time:.1f}h"
-    
+
     # Update portfolio size
     portfolio_delta = pnl
-    
+
     new_portfolio_size = update_trade(request.trade_index, updates, current_mode, portfolio_delta)
-    
+
     return {
         "message": "Trade closed successfully",
         "pnl": pnl,

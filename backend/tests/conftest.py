@@ -47,6 +47,13 @@ def isolated_connection(monkeypatch, data_dir):
 
 
 @pytest.fixture
+def no_fees(monkeypatch):
+    """Trade with zero fees and slippage, for tests about P&L bookkeeping rather than costs."""
+    import fees
+    monkeypatch.setattr(fees, "current_rates", lambda client: {"taker": 0.0, "maker": 0.0, "stop_slippage": 0.0, "source": "default"})
+
+
+@pytest.fixture
 def keychain(isolated_connection):
     return isolated_connection
 

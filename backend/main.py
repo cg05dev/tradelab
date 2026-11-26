@@ -23,13 +23,17 @@ logging.basicConfig(
 
 from routers import analytics, calculations, connection, hyperliquid, mode, portfolio, system, trades, webhook  # noqa: E402
 
+import fees  # noqa: E402
 import fill_sync  # noqa: E402
+import paper_sim  # noqa: E402
 from hyperliquid_client import hl_client  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 # How often open live trades are checked against Hyperliquid fills (TP/SL hits on the exchange)
 FILL_SYNC_SECONDS = float(os.getenv("TRADELAB_FILL_SYNC_SECONDS", "15"))
+# How often open paper trades are checked against mainnet prices
+PAPER_SIM_SECONDS = float(os.getenv("TRADELAB_PAPER_SIM_SECONDS", "5"))
 
 
 async def _sync_fills_forever():
@@ -42,11 +46,25 @@ async def _sync_fills_forever():
         await asyncio.sleep(FILL_SYNC_SECONDS)
 
 
+async def _simulate_paper_forever():
+    market = paper_sim.MainnetMarket()
+    while True:
+        try:
+            await asyncio.to_thread(lambda: paper_sim.step(market, fees.current_rates(hl_client)))
+        except Exception as e:
+            logger.warning(f"Paper simulation failed, retrying in {PAPER_SIM_SECONDS:g}s: {e}")
+        await asyncio.sleep(PAPER_SIM_SECONDS)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    task = asyncio.create_task(_sync_fills_forever()) if FILL_SYNC_SECONDS > 0 else None
+    tasks = []
+    if FILL_SYNC_SECONDS > 0:
+        tasks.append(asyncio.create_task(_sync_fills_forever()))
+    if PAPER_SIM_SECONDS > 0:
+        tasks.append(asyncio.create_task(_simulate_paper_forever()))
     yield
-    if task:
+    for task in tasks:
         task.cancel()
 
 

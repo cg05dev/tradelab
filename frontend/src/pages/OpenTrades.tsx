@@ -92,20 +92,22 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
     loadTrades()
   }, [loadTrades])
 
-  // Live trades close on Hyperliquid by themselves (TP/SL hits). The backend applies those fills
-  // to the journal; refresh here so closed trades drop off this list.
+  // Trades close by themselves: live ones when Hyperliquid fills a TP/SL (the backend applies the
+  // fills), paper ones when the backend's simulation reaches a target or stop. Refresh so closed
+  // trades drop off this list.
   useEffect(() => {
-    if (mode !== 'live') return
     const refresh = async () => {
-      try {
-        await syncHyperliquidFills()
-      } catch {
-        // No account connected, or Hyperliquid unreachable: the list still reloads
+      if (mode === 'live') {
+        try {
+          await syncHyperliquidFills()
+        } catch {
+          // No account connected, or Hyperliquid unreachable: the list still reloads
+        }
       }
       await loadTrades(false)
     }
     void refresh()
-    const interval = setInterval(() => void refresh(), 15_000)
+    const interval = setInterval(() => void refresh(), mode === 'live' ? 15_000 : 5_000)
     return () => clearInterval(interval)
   }, [mode, loadTrades])
 
