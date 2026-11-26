@@ -1,27 +1,35 @@
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { TrendingUp } from 'lucide-react'
 import { updatePortfolio } from '../api/portfolio'
+import { setMode } from '../api/hyperliquid'
 import { getErrorMessage } from '../api/error'
+import { MODE_STORAGE_KEY } from '../contexts/ModeContext'
 
+// First run: connect a Hyperliquid account (the live portfolio then syncs from its balance), or
+// start paper trading with a balance typed in here.
 export default function WelcomeScreen({ onComplete }: { onComplete: () => void }) {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [portfolioSize, setPortfolioSize] = useState('')
   const [error, setError] = useState('')
 
-  const submitMutation = useMutation({
+  const startPaper = useMutation({
     mutationFn: async () => {
       const size = parseFloat(portfolioSize)
       if (!portfolioSize || Number.isNaN(size) || size <= 0) {
-        throw new Error('Please enter a valid portfolio size greater than 0')
+        throw new Error('Please enter a starting balance greater than 0')
       }
-      return updatePortfolio(size)
+      await setMode('planning')
+      window.localStorage.setItem(MODE_STORAGE_KEY, 'paper')
+      return updatePortfolio(size, 'paper')
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['portfolio'] })
       onComplete()
     },
-    onError: (err) => setError(getErrorMessage(err, 'Error setting portfolio size. Please try again.')),
+    onError: (err) => setError(getErrorMessage(err, 'Error setting the starting balance. Please try again.')),
   })
 
   return (
@@ -35,20 +43,33 @@ export default function WelcomeScreen({ onComplete }: { onComplete: () => void }
           </div>
 
           <h1 className="text-xl font-semibold text-white mb-1.5 font-display">Welcome to TradeLab</h1>
-          <p className="text-gray-400 text-xs mb-6">Set up your portfolio to get started</p>
+          <p className="text-gray-400 text-xs mb-6">Plan risk-first trades, then journal and review them.</p>
+
+          <button
+            type="button"
+            onClick={() => navigate({ to: '/settings' })}
+            className="w-full px-4 py-2.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 rounded-lg transition-colors font-medium text-sm"
+          >
+            Connect your Hyperliquid account
+          </button>
+          <p className="text-xs text-gray-500 mt-2">Your live portfolio syncs from the account&apos;s balance.</p>
+
+          <div className="my-6 flex items-center gap-3 text-xs text-gray-600">
+            <span className="h-px flex-1 bg-gray-800" />or<span className="h-px flex-1 bg-gray-800" />
+          </div>
 
           <form
             onSubmit={(e) => {
               e.preventDefault()
               setError('')
-              submitMutation.mutate()
+              startPaper.mutate()
             }}
-            className="space-y-4"
+            className="space-y-3"
           >
-            <div>
-              <label htmlFor="portfolio" className="block text-xs text-gray-500 mb-1.5 text-left">
-                Portfolio Size (USD)
-              </label>
+            <label htmlFor="portfolio" className="block text-xs text-gray-500 text-left">
+              Start paper trading with a balance of (USD)
+            </label>
+            <div className="flex gap-2">
               <input
                 id="portfolio"
                 type="number"
@@ -60,25 +81,19 @@ export default function WelcomeScreen({ onComplete }: { onComplete: () => void }
                   setError('')
                 }}
                 onWheel={(e) => (e.currentTarget as HTMLInputElement).blur()}
-                placeholder="0.00"
-                className="w-full px-3.5 py-2.5 bg-black/30 border border-gray-700/60 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-green-500/50 focus:bg-black/40 transition-colors"
-                autoFocus
+                placeholder="10,000"
+                className="min-w-0 flex-1 px-3.5 py-2.5 bg-black/30 border border-gray-700/60 rounded-lg text-white text-sm placeholder-gray-600 focus:outline-none focus:border-indigo-400/50 focus:bg-black/40 transition-colors"
               />
-              {(error || submitMutation.error) && (
-                <p className="text-red-400 text-xs mt-1.5 text-left">{error || getErrorMessage(submitMutation.error)}</p>
-              )}
+              <button
+                type="submit"
+                disabled={startPaper.isPending}
+                className="px-4 py-2.5 bg-indigo-400/[0.06] hover:bg-indigo-400/10 border border-indigo-400/30 text-indigo-300 rounded-lg transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {startPaper.isPending ? 'Starting…' : 'Start'}
+              </button>
             </div>
-
-            <button
-              type="submit"
-              disabled={submitMutation.isPending}
-              className="w-full px-4 py-2.5 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 text-green-400 rounded-lg transition-colors font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {submitMutation.isPending ? 'Setting up...' : 'Get Started'}
-            </button>
+            {error && <p className="text-red-400 text-xs text-left">{error}</p>}
           </form>
-
-          <p className="text-xs text-gray-500 mt-5">You can change this later in the Dashboard</p>
         </div>
       </div>
     </div>

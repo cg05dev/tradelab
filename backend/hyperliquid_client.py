@@ -5,11 +5,15 @@ Provides interface for real-time price data, position monitoring, and trade exec
 
 import logging
 import math
-import os
-import json
+import threading
+import time
+from datetime import datetime, timezone
+from typing import Dict, List, Optional, Tuple
+
 import requests
-from typing import Optional, Dict, List
 from dotenv import load_dotenv
+
+import connection
 
 logger = logging.getLogger(__name__)
 
@@ -52,110 +56,219 @@ def round_price(price: float, sz_decimals: int) -> float:
     return round(price, min(sig_fig_decimals, max(PERP_MAX_DECIMALS - sz_decimals, 0)))
 
 
+API_URLS = {"mainnet": "https://api.hyperliquid.xyz", "testnet": "https://api.hyperliquid-testnet.xyz"}
+
+
+def fetch_user_role(address: str, network: str) -> Dict:
+    """
+    Hyperliquid's role for an address on a network: {"role": "user" | "agent" | "subAccount" | "vault" |
+    "missing", ...}. An agent (API wallet) carries data.user, its account; a sub-account carries
+    data.master. "missing" means Hyperliquid has never seen the address. Raises if the lookup fails.
+    """
+    response = requests.post(f"{API_URLS[network]}/info", json={"type": "userRole", "user": address.lower()}, timeout=10)
+    response.raise_for_status()
+    role = response.json()
+    if not isinstance(role, dict) or "role" not in role:
+        raise ValueError(f"Unexpected userRole response: {role}")
+    return role
+
+
 class HyperliquidClient:
-    """Client for interacting with Hyperliquid exchange - Lazy initialization"""
-    
+    """
+    Client for Hyperliquid. It reads which account to use, and the API wallet key to sign with, from
+    `connection` the first time it's needed; call reload() after either changes.
+
+    With just an account address it is read-only (balance, positions). With an API wallet key it can
+    also trade. If the account is a sub-account, orders are signed by an API wallet of its master
+    account and sent on the sub-account's behalf.
+    """
+
+    # The UI polls the portfolio every second; don't send each poll to Hyperliquid
+    ACCOUNT_CACHE_SECONDS = 3
+    MODE_CACHE_SECONDS = 60  # the account mode only changes when the user switches it on Hyperliquid
+    # Account modes (userAbstraction) whose balances live in the spot clearinghouse. In these modes,
+    # Hyperliquid's docs say the perp clearinghouseState balances are "not meaningful".
+    UNIFIED_MODES = {"unifiedAccount", "portfolioMargin"}
+
     def __init__(self):
-        self._initialized = False
-        self._enabled = os.getenv('HYPERLIQUID_ENABLED', 'false').lower() == 'true'
-        self._wallet_address = os.getenv('HYPERLIQUID_WALLET_ADDRESS', '')
-        self._private_key = os.getenv('HYPERLIQUID_PRIVATE_KEY', '')
-        self._use_testnet = os.getenv('HYPERLIQUID_USE_TESTNET', 'false').lower() == 'true'
-        
-        # Clients - initialized lazily
-        self._info_client = None
-        self._exchange_client = None
-    
+        self._lock = threading.Lock()
+        self.reload()
+
+    def reload(self):
+        """Forget the current connection and clients; the next call reconnects with the saved settings."""
+        with getattr(self, "_lock", threading.Lock()):
+            self._initialized = False
+            self._connection: Optional[connection.Connection] = None
+            self._info_client = None
+            self._exchange_client = None
+            self._account_role: Optional[Dict] = None
+            self._account_summary: Optional[Tuple[float, Dict]] = None
+            self._account_mode_cache: Optional[Tuple[float, str, str]] = None
+
+    @property
+    def connection(self) -> "connection.Connection":
+        if self._connection is None:
+            self._connection = connection.load()
+        return self._connection
+
+    @property
+    def base_url(self) -> str:
+        return API_URLS[self.connection.network]
+
     def _ensure_initialized(self):
         """Lazy initialization - only connect when actually needed"""
         if self._initialized:
             return
-        
-        if not HYPERLIQUID_AVAILABLE:
-            logger.error("Hyperliquid SDK not installed. Run: pip install hyperliquid-python-sdk")
-            self._enabled = False
-            self._initialized = True
-            return
-        
-        if not self._enabled:
-            logger.info("Hyperliquid integration disabled (set HYPERLIQUID_ENABLED=true in .env)")
-            self._initialized = True
-            return
-        
-        try:
-            # API URLs
-            base_url = constants.TESTNET_API_URL if self._use_testnet else constants.MAINNET_API_URL
-            
-            # Validate that we got a proper URL, not something else
-            if not base_url or not isinstance(base_url, str) or not base_url.startswith('http'):
-                logger.error(f"Invalid Hyperliquid API URL: {base_url}")
-                self._enabled = False
-                self._initialized = True
+        with self._lock:
+            if self._initialized:
                 return
-            
-            # Initialize Info client (read-only, no auth needed)
-            logger.info(f"Connecting to Hyperliquid {'Testnet' if self._use_testnet else 'Mainnet'}...")
-            self._info_client = Info(base_url, skip_ws=True)
-            logger.info("Info client connected")
-            
-            # Initialize Exchange client only if credentials are provided
-            if self._wallet_address and self._private_key:
-                # Create wallet from private key (required by SDK)
-                wallet = eth_account.Account.from_key(self._private_key)
-                self._signer_address = wallet.address  # Address derived from private key (for signing)
-                # self._wallet_address remains the ENV value (main account to trade on behalf of)
-                
-                logger.debug(f"Main wallet address (from ENV): {self._wallet_address}")
-                logger.debug(f"Signer address (derived from key): {self._signer_address}")
-                logger.debug(f"Addresses match: {self._wallet_address.lower() == self._signer_address.lower()}")
-                
-                self._exchange_client = Exchange(
-                    wallet,  # First param: wallet object (for signing)
-                    base_url,  # Second param: base URL
-                    account_address=self._wallet_address  # Keyword arg: main account to trade on behalf of
-                )
-                logger.info(f"Exchange client connected for {self._wallet_address[:10]}...")
-                logger.info(f"Trading on behalf of: {self._wallet_address}")
-            else:
-                logger.info("Info client only (no trading credentials provided)")
-            
             self._initialized = True
-                
-        except Exception as e:
-            logger.error(f"Error connecting to Hyperliquid: {e}")
-            self._enabled = False
-            self._info_client = None
-            self._exchange_client = None
-            self._initialized = True
-    
+
+            if not HYPERLIQUID_AVAILABLE:
+                logger.error("Hyperliquid SDK not installed. Run: pip install hyperliquid-python-sdk")
+                return
+
+            conn = self.connection
+            try:
+                logger.info(f"Connecting to Hyperliquid {conn.network}...")
+                self._info_client = Info(self.base_url, skip_ws=True)
+            except Exception as e:
+                logger.error(f"Error connecting to Hyperliquid: {e}")
+                return
+
+            if not (conn.account_address and conn.agent_key):
+                logger.info("Read-only: no API wallet configured" if conn.account_address else "No account connected")
+                return
+
+            try:
+                wallet = eth_account.Account.from_key(conn.agent_key)
+                role = self._fetch_role(conn.account_address)
+                if role.get("role") == "subAccount":
+                    # A sub-account has no API wallets of its own: its master's sign on its behalf
+                    self._exchange_client = Exchange(
+                        wallet, self.base_url,
+                        account_address=role["data"]["master"], vault_address=conn.account_address,
+                    )
+                else:
+                    self._exchange_client = Exchange(wallet, self.base_url, account_address=conn.account_address)
+                logger.info(f"Trading enabled for {conn.account_address} with API wallet {wallet.address}")
+            except Exception as e:
+                logger.error(f"Could not set up trading: {e}")
+                self._exchange_client = None
+
     @property
-    def enabled(self):
-        return self._enabled
-    
+    def enabled(self) -> bool:
+        """An account is connected (read-only at least)."""
+        return HYPERLIQUID_AVAILABLE and bool(self.connection.account_address)
+
     @property
-    def wallet_address(self):
-        return self._wallet_address
-    
+    def can_trade(self) -> bool:
+        return self.exchange_client is not None
+
     @property
-    def use_testnet(self):
-        return self._use_testnet
-    
+    def wallet_address(self) -> Optional[str]:
+        return self.connection.account_address
+
+    @property
+    def use_testnet(self) -> bool:
+        return self.connection.testnet
+
     @property
     def info_client(self):
         self._ensure_initialized()
         return self._info_client
-    
+
     @property
     def exchange_client(self):
         self._ensure_initialized()
         return self._exchange_client
-    
+
+    def _fetch_role(self, address: str) -> Dict:
+        """fetch_user_role on the connected network, cached for the connected account until reload()."""
+        if address == self.connection.account_address and self._account_role is not None:
+            return self._account_role
+        role = fetch_user_role(address, self.connection.network)
+        if address == self.connection.account_address:
+            self._account_role = role
+        return role
+
+    def _info(self, request: Dict):
+        response = requests.post(f"{self.base_url}/info", json=request, timeout=10)
+        response.raise_for_status()
+        return response.json()
+
+    def _account_mode(self, address: str) -> str:
+        """The account's mode (userAbstraction): "unifiedAccount", "portfolioMargin", "disabled",
+        "default" or "dexAbstraction". Cached for a minute."""
+        cached = self._account_mode_cache
+        if cached and cached[1] == address and time.monotonic() - cached[0] < self.MODE_CACHE_SECONDS:
+            return cached[2]
+        mode = self._info({"type": "userAbstraction", "user": address})
+        if not isinstance(mode, str):
+            raise ValueError(f"Unexpected userAbstraction response: {mode}")
+        self._account_mode_cache = (time.monotonic(), address, mode)
+        return mode
+
+    def get_account_summary(self) -> Dict:
+        """
+        The connected account's trading balance: account_value (equity, including unrealized P&L),
+        withdrawable and margin_used, in USD, plus account_mode. Cached for a few seconds. Raises if
+        it can't be fetched.
+
+        - Standard accounts keep perp collateral in the perp clearinghouse, whose accountValue is the
+          equity.
+        - Unified and portfolio-margin accounts keep USDC in the spot balance, which collateralizes perps
+          directly. Equity is that USDC plus the unrealized P&L of open positions, which isn't in the
+          balance until a position closes. Other collateral tokens (portfolio margin) aren't counted.
+        """
+        cached = self._account_summary
+        if cached and time.monotonic() - cached[0] < self.ACCOUNT_CACHE_SECONDS:
+            return cached[1]
+        address = self.connection.account_address
+        if not address:
+            raise ValueError("No Hyperliquid account connected")
+        mode = self._account_mode(address)
+        perp = self._info({"type": "clearinghouseState", "user": address})
+        if mode in self.UNIFIED_MODES:
+            spot = self._info({"type": "spotClearinghouseState", "user": address})
+            usdc = next((b for b in spot.get("balances", []) if b.get("coin") == "USDC"), None)
+            total = float(usdc["total"]) if usdc else 0.0
+            hold = float(usdc["hold"]) if usdc else 0.0
+            available = dict(spot.get("tokenToAvailableAfterMaintenance") or []).get(0)
+            unrealized = sum(float(p["position"].get("unrealizedPnl") or 0) for p in perp.get("assetPositions", []))
+            summary = {
+                "account_value": total + unrealized,
+                "withdrawable": float(available) if available is not None else max(total - hold, 0.0),
+                "margin_used": hold,
+            }
+        else:
+            margin = perp["marginSummary"]
+            summary = {
+                "account_value": float(margin["accountValue"]),
+                "withdrawable": float(perp["withdrawable"]),
+                "margin_used": float(margin["totalMarginUsed"]),
+            }
+        summary["account_mode"] = mode
+        summary["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self._account_summary = (time.monotonic(), summary)
+        return summary
+
+    def last_account_summary(self) -> Optional[Dict]:
+        """The most recent successful get_account_summary(), however old, or None."""
+        return self._account_summary[1] if self._account_summary else None
+
+    def submit_signed_action(self, action: Dict, signature: Dict, nonce: int) -> Dict:
+        """Send an action signed elsewhere (e.g. by the user's browser wallet) to /exchange."""
+        payload = {"action": action, "nonce": nonce, "signature": signature, "vaultAddress": None, "expiresAfter": None}
+        response = requests.post(f"{self.base_url}/exchange", json=payload, timeout=10)
+        response.raise_for_status()
+        return response.json()
+
     def get_current_price(self, coin: str = "BTC") -> Optional[float]:
         """Get the current mid price from Hyperliquid's public REST API."""
         try:
-            base_url = constants.TESTNET_API_URL if self._use_testnet else constants.MAINNET_API_URL
             response = requests.post(
-                f"{base_url}/info",
+                f"{self.base_url}/info",
                 json={"type": "allMids"},
                 timeout=10,
             )
@@ -220,13 +333,14 @@ class HyperliquidClient:
             logger.error("get_positions: Info client not initialized")
             return []
         
-        if not self._wallet_address:
-            logger.error("get_positions: Wallet address not set")
+        address = self.connection.account_address
+        if not address:
+            logger.error("get_positions: no account connected")
             return []
         
         try:
-            logger.debug(f"Fetching user_state for wallet: {self._wallet_address}")
-            user_state = self._info_client.user_state(self._wallet_address)
+            logger.debug(f"Fetching user_state for wallet: {address}")
+            user_state = self._info_client.user_state(address)
             logger.debug(f"user_state response: {user_state}")
             
             if not user_state:
@@ -272,7 +386,7 @@ class HyperliquidClient:
         """Place a reduce-only stop-market order. `trigger_price` must already be a valid price (see round_price)."""
         self._ensure_initialized()
         
-        if not self._exchange_client or not self._wallet_address or not self._private_key:
+        if not self._exchange_client:
             return {"status": "error", "message": "Exchange client not configured"}
         
         try:
@@ -303,7 +417,7 @@ class HyperliquidClient:
         """Close `sz` units of the position in `coin` via market order, or all of it when `sz` is None"""
         self._ensure_initialized()
 
-        if not self._exchange_client or not self._wallet_address or not self._private_key:
+        if not self._exchange_client:
             return {"status": "error", "message": "Exchange client not configured"}
 
         try:

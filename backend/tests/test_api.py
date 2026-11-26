@@ -43,19 +43,19 @@ class TestPortfolio:
     def test_update_and_read(self, client):
         client.put("/api/portfolio?mode=paper", json={"portfolio_size": 5_000})
 
-        assert client.get("/api/portfolio?mode=paper").json() == {"portfolio_size": 5_000}
-        assert client.get("/api/portfolio?mode=live").json() == {"portfolio_size": 0}
+        assert client.get("/api/portfolio?mode=paper").json() == {"portfolio_size": 5_000, "source": "manual"}
+        assert client.get("/api/portfolio?mode=live").json()["source"] == "none"
 
     def test_rejects_negative(self, client):
         assert client.put("/api/portfolio", json={"portfolio_size": -1}).status_code == 400
 
-    def test_reset_clears_current_mode_portfolio(self, client):
-        client.put("/api/portfolio?mode=live", json={"portfolio_size": 5_000})
+    def test_reset_clears_the_paper_balance(self, client):
+        client.put("/api/portfolio?mode=paper", json={"portfolio_size": 5_000})
 
-        response = client.post("/api/portfolio/reset")
+        response = client.post("/api/portfolio/reset?mode=paper")
 
         assert response.status_code == 200
-        assert client.get("/api/portfolio?mode=live").json() == {"portfolio_size": 0}
+        assert client.get("/api/portfolio?mode=paper").json()["portfolio_size"] == 0
 
 
 class TestTradeLifecycle:

@@ -90,6 +90,7 @@ def get_hyperliquid_status():
     return {
         "enabled": hl_client.enabled,
         "connected": hl_client.info_client is not None,
+        "trading_enabled": hl_client.enabled and hl_client.can_trade,
         "testnet": hl_client.use_testnet if hl_client.enabled else None,
         "wallet_address": hl_client.wallet_address if hl_client.enabled else None
     }
@@ -110,7 +111,7 @@ def get_hyperliquid_price(coin: str):
 def get_hyperliquid_positions(coin: Optional[str] = None):
     """Get open positions from Hyperliquid"""
     if not hl_client or not hl_client.enabled:
-        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
+        raise HTTPException(status_code=503, detail="No Hyperliquid account connected. Connect one in Settings.")
 
     if not hl_client.wallet_address:
         raise HTTPException(status_code=400, detail="Wallet address not configured")
@@ -120,9 +121,9 @@ def get_hyperliquid_positions(coin: Optional[str] = None):
 
 @router.get("/assets")
 def get_hyperliquid_assets():
-    """Get available assets and their max leverage from Hyperliquid"""
-    if not hl_client or not hl_client.enabled:
-        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
+    """Get available assets and their max leverage from Hyperliquid (public; no account needed)"""
+    if not hl_client or not hl_client.info_client:
+        raise HTTPException(status_code=503, detail="Hyperliquid market data unavailable")
 
     asset_data = hl_client.get_asset_metadata()
     if asset_data is None:
@@ -203,10 +204,10 @@ def place_hyperliquid_order(request: HyperliquidOrderRequest):
     check_execution_allowed()
 
     if not hl_client or not hl_client.enabled:
-        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
+        raise HTTPException(status_code=503, detail="No Hyperliquid account connected. Connect one in Settings.")
 
     if not hl_client.exchange_client:
-        raise HTTPException(status_code=400, detail="Exchange client not configured - check wallet credentials")
+        raise HTTPException(status_code=400, detail="Trading isn't enabled for this account. Enable it in Settings.")
 
     # Size from a price the server fetches itself, not the one the browser sent
     current_price = hl_client.get_current_price(request.coin)
@@ -331,10 +332,10 @@ def close_hyperliquid_position(coin: str, request: ClosePositionRequest):
     hl_client._ensure_initialized()
 
     if not hl_client.enabled:
-        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
+        raise HTTPException(status_code=503, detail="No Hyperliquid account connected. Connect one in Settings.")
 
     if not hl_client.exchange_client:
-        raise HTTPException(status_code=400, detail="Exchange client not configured - check wallet credentials")
+        raise HTTPException(status_code=400, detail="Trading isn't enabled for this account. Enable it in Settings.")
 
     try:
         all_positions = hl_client.get_positions(None)

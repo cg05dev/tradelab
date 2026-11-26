@@ -12,6 +12,8 @@ const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
+    // The backend refuses changes without this header, which other websites can't add (see main.py)
+    'X-TradeLab-Client': 'web',
   },
 })
 

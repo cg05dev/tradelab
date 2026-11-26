@@ -1,4 +1,15 @@
-export type PortfolioResponse = { portfolio_size?: number }
+// source "manual": paper mode's balance, entered by the user.
+// source "hyperliquid": the live account's value (stale if Hyperliquid couldn't be reached; null
+//   portfolio_size if it hasn't been fetched yet).
+// source "none": live mode with no account connected (null portfolio_size).
+export type PortfolioResponse = {
+  portfolio_size?: number | null
+  source?: 'hyperliquid' | 'manual' | 'none'
+  stale?: boolean
+  withdrawable?: number
+  updated_at?: string
+  sync_error?: string
+}
 export type AnalyticsOverview = { total_pnl?: number; win_rate?: number; avg_win?: number; avg_loss?: number; profit_factor?: number | null }
 export type ApiError = { response?: { data?: { detail?: string } } }
 export type HyperliquidAsset = { symbol: string; max_leverage: number }

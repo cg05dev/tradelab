@@ -11,7 +11,8 @@ from pydantic import BaseModel
 from models import PositionSizeRequest, StopLoss, TakeProfit, TradeData
 from routers.calculations import calculate_position_size
 from routers.trades import add_trade
-from storage import load_portfolio_size, save_portfolio_size
+from routers.portfolio import portfolio_size_for
+from storage import save_portfolio_size
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,8 @@ async def webhook_trade(data: WebhookTrade, x_webhook_secret: Optional[str] = He
 
         mode = data.mode if data.mode in ["paper", "live"] else "paper"
 
-        if data.portfolio_size and data.portfolio_size > 0:
+        # Only the paper balance can be set; live sizing always uses the Hyperliquid account value
+        if mode == "paper" and data.portfolio_size and data.portfolio_size > 0:
             save_portfolio_size(data.portfolio_size, mode)
 
         tps = []
@@ -78,10 +80,8 @@ async def webhook_trade(data: WebhookTrade, x_webhook_secret: Optional[str] = He
         if data.sl > 0:
             sls.append({"price": data.sl, "allocation": 1.0})
 
-        portfolio = load_portfolio_size(mode)
-        if portfolio <= 0:
-            portfolio = data.portfolio_size if data.portfolio_size else 200.0
-            save_portfolio_size(portfolio, mode)
+        if mode == "paper" and portfolio_size_for(mode) <= 0:
+            save_portfolio_size(data.portfolio_size or 200.0, mode)
 
         risk_pct = data.risk_pct if data.risk_pct > 0 else 2.0
         pos_result = calculate_position_size(
