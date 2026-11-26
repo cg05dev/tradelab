@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
+import fees
 import fill_sync
 from models import StopLoss, TakeProfit
 from storage import load_mode, load_trades
@@ -334,6 +335,12 @@ class ClosePositionRequest(BaseModel):
     # The live journal trade being closed: its close fills are credited to it and its journal
     # entry is updated from them
     trade_index: Optional[int] = None
+
+@router.get("/fees")
+def get_fee_rates():
+    """Fee rates and the stop slippage TradeLab plans with: the connected account's, else Hyperliquid's base tier."""
+    return fees.current_rates(hl_client)
+
 
 @router.post("/sync")
 def sync_fills():

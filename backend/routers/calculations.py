@@ -3,12 +3,28 @@ from typing import List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+import fees
 from models import PositionSizeRequest, StopLoss, TakeProfit
 from routers.portfolio import portfolio_size_for
 from storage import load_mode
 from trade_calculator import trade_calc
 
+try:
+    from hyperliquid_client import hl_client
+except ImportError:
+    hl_client = None
+
 router = APIRouter(prefix="/api/calculate", tags=["calculations"])
+
+
+def _costs(position_size_dollars: float, distance: float, rates) -> dict:
+    """Breakdown of the loss at the stop (or liquidation): price move, fees and slippage."""
+    return {
+        "price_loss": position_size_dollars * distance,
+        "fees_at_stop": position_size_dollars * 2 * rates["taker"],
+        "slippage_at_stop": position_size_dollars * rates["stop_slippage"],
+        "fee_rates": rates,
+    }
 
 
 RISK_PCT = 0.02
@@ -20,7 +36,10 @@ def calculate_position_size(request: PositionSizeRequest, mode: Optional[str] = 
     portfolio_size = portfolio_size_for(current_mode)
     risk_pct = request.risk_percentage / 100 if request.risk_percentage else RISK_PCT
     risk_amount = portfolio_size * risk_pct
-    
+    # Size so the loss at the stop, including both fees and slippage, is the risk amount
+    rates = fees.current_rates(hl_client)
+    extra = fees.cost_at_stop(rates)
+
     if request.entry_price == 0:
         return {
             "position_size_dollars": 0,
@@ -56,7 +75,7 @@ def calculate_position_size(request: PositionSizeRequest, mode: Optional[str] = 
         
         # Calculate position size (notional value in dollars)
         # This is: risk_amount / liquidation_percentage
-        position_size_dollars = risk_amount / liquidation_percentage
+        position_size_dollars = risk_amount / (liquidation_percentage + extra)
         
         # Calculate position size in coin units
         position_size_units = position_size_dollars / request.entry_price
@@ -74,6 +93,7 @@ def calculate_position_size(request: PositionSizeRequest, mode: Optional[str] = 
             "risk_amount": risk_amount,
             "sl_percentage": liquidation_percentage * 100,
             "liquidation_price": liquidation_price,
+            **_costs(position_size_dollars, liquidation_percentage, rates),
             "verification": f"${margin_required:,.2f} margin × {request.leverage}x = ${verified_position_size:,.2f} position",
             "message": f"Margin: ${margin_required:,.2f} | Position: {position_size_units:.6f} units"
         }
@@ -94,7 +114,7 @@ def calculate_position_size(request: PositionSizeRequest, mode: Optional[str] = 
     
     # Calculate position size (notional value in dollars)
     # This is: risk_amount / sl_percentage
-    position_size_dollars = risk_amount / sl_percentage
+    position_size_dollars = risk_amount / (sl_percentage + extra)
     
     # Calculate position size in coin units
     position_size_units = position_size_dollars / request.entry_price
@@ -111,6 +131,7 @@ def calculate_position_size(request: PositionSizeRequest, mode: Optional[str] = 
         "margin_required": margin_required,
         "risk_amount": risk_amount,
         "sl_percentage": sl_percentage * 100,
+        **_costs(position_size_dollars, sl_percentage, rates),
         "verification": f"${margin_required:,.2f} margin × {request.leverage}x = ${verified_position_size:,.2f} position",
         "message": f"Margin: ${margin_required:,.2f} | Position: {position_size_units:.6f} units"
     }

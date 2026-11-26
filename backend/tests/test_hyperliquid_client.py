@@ -223,3 +223,29 @@ class TestConnectedClient:
         client.reload()
 
         assert client.wallet_address == ACCOUNT
+
+
+class TestFeeRates:
+    @patch("hyperliquid_client.requests.post")
+    def test_applies_the_referral_discount_and_caches(self, mock_post, keychain):
+        # What Hyperliquid returned for a real account; its fills were charged 0.0432%
+        mock_post.return_value = _response({"userCrossRate": "0.00045", "userAddRate": "0.00015", "activeReferralDiscount": "0.04"})
+        client = _connect(keychain, with_key=False)
+
+        rates = client.get_fee_rates()
+        client.get_fee_rates()
+
+        assert rates == {"taker": pytest.approx(0.000432), "maker": pytest.approx(0.000144)}
+        assert mock_post.call_count == 1
+        assert mock_post.call_args.kwargs["json"] == {"type": "userFees", "user": ACCOUNT}
+
+    def test_without_an_account_planning_uses_the_base_tier(self):
+        import fees
+        assert fees.current_rates(HyperliquidClient()) == {"taker": 0.00045, "maker": 0.00015, "stop_slippage": 0.0005, "source": "default"}
+
+    def test_falls_back_to_the_base_tier_if_hyperliquid_is_unreachable(self):
+        import fees
+        from unittest.mock import Mock
+        client = Mock(enabled=True)
+        client.get_fee_rates.side_effect = RuntimeError("timeout")
+        assert fees.current_rates(client)["source"] == "default"

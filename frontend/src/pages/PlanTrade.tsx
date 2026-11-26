@@ -3,13 +3,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { addTrade } from '../api/trades'
 import { getPortfolio } from '../api/portfolio'
-import { getHyperliquidPrice, placeHyperliquidOrder, getHyperliquidAssets } from '../api/hyperliquid'
+import { getHyperliquidPrice, placeHyperliquidOrder, getHyperliquidAssets, getFeeRates, type FeeRates } from '../api/hyperliquid'
 import { getErrorMessage } from '../api/error'
 import { getConnection } from '../api/connection'
 import { useMode, type UITradingMode } from '../contexts/ModeContext'
 import type { HyperliquidAsset, TakeProfit, TradeDetails, HyperliquidOrderRequest } from '../types'
 
 const MAINTENANCE_MARGIN = 0.0125
+// Hyperliquid's base tier, used until the account's own rates load (slightly high, so never undersized risk)
+const DEFAULT_FEES: FeeRates = { taker: 0.00045, maker: 0.00015, stop_slippage: 0.0005, source: 'default' }
 const MAX_LIVE_RISK_PERCENT = 5
 const normalizeMode = (value?: string | null): UITradingMode => value === 'paper' ? 'paper' : 'live'
 // The form edits allocations as percentages; the API and journal store fractions of the position (0-1)
@@ -46,6 +48,11 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     queryKey: ['connection'],
     queryFn: async () => (await getConnection()).data,
     enabled: mode === 'live',
+  })
+  const feesQuery = useQuery({
+    queryKey: ['hyperliquid-fees'],
+    queryFn: async () => (await getFeeRates()).data,
+    staleTime: 10 * 60_000,
   })
   const assetsQuery = useQuery<HyperliquidAsset[]>({
     queryKey: ['hyperliquid-assets'],
@@ -86,16 +93,22 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     const riskDistancePercent = isStopLossValid && stopLoss
       ? Math.abs(currentPrice - stopLoss) / currentPrice
       : Math.abs(currentPrice - liquidationPrice) / currentPrice
-    const positionSizeDollars = riskAmount / riskDistancePercent
+    // A stopped-out trade pays the taker fee on entry and on the stop, and fills a little past the
+    // stop. Size so the loss at the stop, including those, is the risk amount.
+    const fees = feesQuery.data ?? DEFAULT_FEES
+    const costAtStop = 2 * fees.taker + fees.stop_slippage
+    const positionSizeDollars = riskAmount / (riskDistancePercent + costAtStop)
     const positionSize = positionSizeDollars / currentPrice
     const marginRequired = positionSizeDollars / leverage
+    // Targets are resting limit orders: the entry's taker fee plus a maker fee at the target
     const tpProfits = takeProfits
       .filter((tp) => tp.price > 0 && tp.allocation > 0)
-      .map((tp, index) => ({
-        ...tp,
-        index: index + 1,
-        profit: ((tp.price - currentPrice) * positionSize * tp.allocation / 100) * (direction === 'short' ? -1 : 1),
-      }))
+      .map((tp, index) => {
+        const share = tp.allocation / 100
+        const gross = (tp.price - currentPrice) * positionSize * share * (direction === 'short' ? -1 : 1)
+        const tpFees = positionSizeDollars * share * fees.taker + tp.price * positionSize * share * fees.maker
+        return { ...tp, index: index + 1, profit: gross - tpFees }
+      })
     const estimatedProfit = tpProfits.reduce((sum, tp) => sum + tp.profit, 0)
 
     return {
@@ -110,8 +123,11 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
       positionValue: positionSizeDollars,
       currentPrice,
       isStopLossValid,
+      priceLossAtStop: positionSizeDollars * riskDistancePercent,
+      feesAtStop: positionSizeDollars * 2 * fees.taker,
+      slippageAtStop: positionSizeDollars * fees.stop_slippage,
     }
-  }, [currentPrice, direction, leverage, portfolioQuery.data?.portfolio_size, riskPercentage, takeProfits, stopLoss])
+  }, [currentPrice, direction, feesQuery.data, leverage, portfolioQuery.data?.portfolio_size, riskPercentage, takeProfits, stopLoss])
 
   const executeMutation = useMutation({
     mutationFn: async (): Promise<{ warnings: string[] }> => {
@@ -441,8 +457,13 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
                 </div>
                 <p className="font-display text-xl font-medium tabular-nums text-white">{formatMoney((portfolioQuery.data?.portfolio_size ?? 0) * riskPercentage / 100)}</p>
               </div>
-              <Metric label={hasStop ? 'Estimated loss at stop' : 'Loss at liquidation'} value={formatMoney(tradeDetails.estimatedLoss)} tone="text-red-400" detail={hasStop ? undefined : 'No stop configured'} />
-              <Metric label="Estimated profit" value={validTargets.length ? formatMoney(tradeDetails.estimatedProfit) : '—'} tone={validTargets.length ? 'text-green-400' : 'text-white'} detail={validTargets.length ? `${validTargets.length} active target${validTargets.length === 1 ? '' : 's'}` : 'Add a target'} />
+              <Metric
+                label={hasStop ? 'Estimated loss at stop' : 'Loss at liquidation'}
+                value={formatMoney(tradeDetails.estimatedLoss)}
+                tone="text-red-400"
+                detail={`${hasStop ? '' : 'No stop configured · '}incl. ${formatMoney(tradeDetails.feesAtStop)} fees + ${formatMoney(tradeDetails.slippageAtStop)} est. slippage`}
+              />
+              <Metric label="Estimated profit" value={validTargets.length ? formatMoney(tradeDetails.estimatedProfit) : '—'} tone={validTargets.length ? 'text-green-400' : 'text-white'} detail={validTargets.length ? `${validTargets.length} active target${validTargets.length === 1 ? '' : 's'}, after fees` : 'Add a target'} />
             </div>
           </aside>
         )}
@@ -465,6 +486,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
               <ConfirmRow label="Position / margin" value={`${formatMoney(tradeDetails.positionSizeDollars)} / ${formatMoney(tradeDetails.marginRequired)}`} />
               <ConfirmRow label="Leverage" value={`${leverage}x isolated`} />
               <ConfirmRow label="Maximum risk" value={formatMoney(tradeDetails.estimatedLoss)} />
+              <ConfirmRow label="…of which fees + slippage" value={`${formatMoney(tradeDetails.feesAtStop)} + ${formatMoney(tradeDetails.slippageAtStop)}`} />
               <ConfirmRow label="Stop loss" value={formatMoney(stopLoss)} />
               <ConfirmRow label="Profit targets" value={`${validTargets.length} · ${allocationTotal.toFixed(0)}% allocated`} />
               <ConfirmRow label="Liquidation" value={formatMoney(tradeDetails.liquidationPrice)} />

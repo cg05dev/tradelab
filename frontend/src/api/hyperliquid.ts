@@ -26,6 +26,9 @@ export const closeHyperliquidPosition = (coin: string, size?: number, tradeIndex
     ...(size ? { size } : {}),
     ...(tradeIndex != null ? { trade_index: tradeIndex } : {}),
   })
+// Fee rates and stop slippage the planner sizes with: the connected account's, else Hyperliquid's base tier
+export type FeeRates = { taker: number; maker: number; stop_slippage: number; source: 'account' | 'default' }
+export const getFeeRates = () => api.get<FeeRates>('/api/hyperliquid/fees')
 // Apply new Hyperliquid fills (TP/SL hits) to the open live journal trades now
 export const syncHyperliquidFills = () =>
   api.post<{ synced: boolean; updated: number[]; closed: number[] }>('/api/hyperliquid/sync')

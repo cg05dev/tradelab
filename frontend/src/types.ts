@@ -26,6 +26,10 @@ export type TradeDetails = {
   riskRewardRatio: number
   tpProfits: Array<{ index: number; price: number; allocation: number; profit: number }>
   isStopLossValid?: boolean
+  // estimatedLoss = priceLossAtStop + feesAtStop + slippageAtStop
+  priceLossAtStop: number
+  feesAtStop: number
+  slippageAtStop: number
 }
 export type Trade = {
   id?: number | string
