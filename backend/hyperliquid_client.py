@@ -4,11 +4,11 @@ Provides interface for real-time price data, position monitoring, and trade exec
 """
 
 import logging
+import math
 import os
 import json
 import requests
 from typing import Optional, Dict, List
-from datetime import datetime
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,27 @@ except ImportError:
     Exchange = None
     constants = None
     eth_account = None
+
+# Perp prices may have at most 6 - szDecimals decimal places (8 - szDecimals for spot, unused here)
+PERP_MAX_DECIMALS = 6
+PRICE_SIG_FIGS = 5
+
+
+def round_price(price: float, sz_decimals: int) -> float:
+    """
+    Round a price to the nearest one Hyperliquid accepts for a perp with `sz_decimals`.
+
+    Prices may have at most 5 significant figures and at most 6 - szDecimals decimal places, but a
+    whole number is always valid however many digits it has (123456 is fine, 12345.6 is not). This
+    matches the SDK's own rounding, except that the SDK also cuts large whole numbers to 5 figures.
+    Rounds once, to whichever limit is tighter, so the result is the nearest valid price.
+    """
+    if price <= 0:
+        return 0.0
+    if price >= 10 ** PRICE_SIG_FIGS:
+        return float(round(price))
+    sig_fig_decimals = PRICE_SIG_FIGS - 1 - math.floor(math.log10(price))
+    return round(price, min(sig_fig_decimals, max(PERP_MAX_DECIMALS - sz_decimals, 0)))
 
 
 class HyperliquidClient:
@@ -248,66 +269,24 @@ class HyperliquidClient:
             return []
     
     def place_stop_order(self, coin: str, is_buy: bool, size: float, trigger_price: float, is_long_position: bool) -> Dict:
-        """Place a stop order via direct API call"""
+        """Place a reduce-only stop-market order. `trigger_price` must already be a valid price (see round_price)."""
         self._ensure_initialized()
         
         if not self._exchange_client or not self._wallet_address or not self._private_key:
             return {"status": "error", "message": "Exchange client not configured"}
         
         try:
-            # For a stop order, we need:
-            # - If long position and SL: trigger when price <= SL, sell
-            # - If short position and SL: trigger when price >= SL, buy
-            
-            # Create wallet for signing
-            wallet = eth_account.Account.from_key(self._private_key)
-            
-            # Get current timestamp
-            timestamp = int(datetime.now().timestamp() * 1000)
-            
-            # Build the order request
-            # Stop order as trigger + market close
-            order_request = {
-                "action": {
-                    "type": "order",
-                    "orders": [
-                        {
-                            "coin": coin,
-                            "isBuy": not is_long_position,  # Opposite to close position
-                            "sz": str(size),
-                            "limitPx": "0",  # Market order
-                            "orderType": {"trigger": {"triggerPx": str(trigger_price), "tpsl": "sl"}},
-                            "reduceOnly": True
-                        }
-                    ],
-                    "grouping": "na",
-                    "builder": None
-                },
-                "nonce": timestamp,
-                "signature": None  # Will be signed below
-            }
-            
-            # Sign the request (simplified - SDK should handle this)
-            # For now, use the SDK's order method but with trigger type
-            # Actually, let's try using the SDK with a special order type
-            
-            # Try using exchange client's ability to place trigger orders
-            # Trigger orders in Hyperliquid use "trigger" order type
-            # Must include isMarket field
+            # A long's stop sells when the price falls to the trigger; a short's buys when it rises to it.
+            # isMarket fills at market once triggered. The SDK still requires a limit price, so the
+            # trigger price is used, and must already be valid (see round_price).
             trigger_order_type = {"trigger": {"triggerPx": trigger_price, "tpsl": "sl", "isMarket": True}}
-            
-            logger.debug(f"trigger_order_type: {trigger_order_type}")
-            logger.debug(f"Order parameters: coin={coin}, is_buy={not is_long_position}, size={size}, trigger_price={trigger_price}")
-            
-            # For trigger orders, we need a valid limit price (not 0)
-            # Use the trigger price as the limit price
-            limit_px = round(trigger_price, 0)
-            
+            logger.debug(f"Stop order: coin={coin}, is_buy={not is_long_position}, size={size}, trigger_price={trigger_price}")
+
             result = self._exchange_client.order(
                 name=coin,
                 is_buy=not is_long_position,  # Close position
                 sz=size,
-                limit_px=limit_px,  # Valid price for the order
+                limit_px=trigger_price,
                 order_type=trigger_order_type,
                 reduce_only=True,
                 cloid=None

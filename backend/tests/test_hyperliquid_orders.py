@@ -111,6 +111,35 @@ class TestPlaceOrder:
 
         assert sum(_sizes(hl.exchange_client.order)[1:]) <= 0.02 + 1e-12
 
+    def test_prices_below_a_dollar_keep_their_precision(self, live, hl):
+        """Whole-dollar rounding used to turn every sub-$1 price into 0, so TP/SL orders were skipped."""
+        hl.get_current_price.return_value = 0.15
+        hl.get_asset_metadata.return_value = {"DOGE": {"sz_decimals": 0}}
+        hl.exchange_client.order.side_effect = [_filled(13_333, 0.1503), RESTING]
+
+        body = live.post("/api/hyperliquid/order", json=_order(
+            coin="DOGE", entry_price=0.15,
+            take_profits=[{"price": 0.161_234_5, "allocation": 1.0}],
+            stop_losses=[{"price": 0.141_234_5, "allocation": 1.0}],
+        )).json()
+
+        entry, tp = hl.exchange_client.order.call_args_list
+        assert entry.kwargs["limit_px"] == 0.1503  # 0.15 + 0.2% buffer
+        assert entry.kwargs["sz"] == 13_333  # $200 x 10 / $0.15, whole coins
+        assert tp.kwargs["limit_px"] == 0.161_23
+        assert hl.place_stop_order.call_args.kwargs["trigger_price"] == 0.141_23
+        assert body["status"] == "success"
+
+    def test_btc_prices_stay_whole_dollars(self, live, hl):
+        hl.get_current_price.return_value = 100_000.0
+        hl.exchange_client.order.side_effect = [_filled(0.02, 100_200), RESTING]
+
+        live.post("/api/hyperliquid/order", json=_order(take_profits=[{"price": 110_005.5, "allocation": 1.0}]))
+
+        entry, tp = hl.exchange_client.order.call_args_list
+        assert entry.kwargs["limit_px"] == 100_200
+        assert tp.kwargs["limit_px"] == 110_006
+
     def test_rejected_stop_loss_is_reported_not_swallowed(self, live, hl):
         hl.exchange_client.order.side_effect = [_filled(0.02, 100_000), RESTING, RESTING]
         hl.place_stop_order.return_value = _status({"error": "Invalid TP/SL price"})

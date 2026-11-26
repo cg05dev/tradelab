@@ -14,9 +14,10 @@ from storage import load_mode
 logger = logging.getLogger(__name__)
 
 try:
-    from hyperliquid_client import hl_client
+    from hyperliquid_client import hl_client, round_price
 except ImportError:
     hl_client = None
+    round_price = None
 
 router = APIRouter(prefix="/api/hyperliquid", tags=["hyperliquid"])
 
@@ -169,7 +170,7 @@ def _place_protection(levels, kind: str, filled_size: float, sz_decimals: int, p
     for number, level in enumerate(levels, start=1):
         if level.price <= 0 or level.allocation <= 0:
             continue
-        price = round(level.price, 0)
+        price = round_price(level.price, sz_decimals)
         # Cap at what's left so per-level rounding can never add up to more than the position
         size = min(round(filled_size * level.allocation, sz_decimals), round(filled_size - allocated, sz_decimals))
         allocated += max(size, 0)
@@ -182,7 +183,7 @@ def _place_protection(levels, kind: str, filled_size: float, sz_decimals: int, p
                 logger.exception(f"Failed to place {kind} {number}")
                 error = str(e)
         if error:
-            message = f"{kind} {number} at ${price:,.0f} was not placed: {error}."
+            message = f"{kind} {number} at ${price:,} was not placed: {error}."
             if kind == "Stop loss":
                 message += " That part of the position has no stop on Hyperliquid; set one there manually."
             logger.error(message)
@@ -218,8 +219,10 @@ def place_hyperliquid_order(request: HyperliquidOrderRequest):
     if position_size_units <= 0:
         raise HTTPException(status_code=400, detail="Order size rounds to zero; increase the margin")
 
-    # Hyperliquid has no true market order: use an IOC limit with a 0.2% buffer (whole dollars for BTC)
-    limit_px = round(current_price * (1.002 if request.is_buy else 0.998), 0)
+    # Hyperliquid has no true market order: use an IOC limit with a 0.2% buffer
+    limit_px = round_price(current_price * (1.002 if request.is_buy else 0.998), sz_decimals)
+    if limit_px <= 0:
+        raise HTTPException(status_code=400, detail=f"Price {current_price} cannot be expressed as a valid {request.coin} order price")
     logger.info(f"Order: {request.coin} | Size: {position_size_units} | Leverage: {request.leverage}x | Margin: ${request.margin_amount:.2f} @ {limit_px}")
 
     warnings = []
@@ -377,7 +380,7 @@ def close_hyperliquid_position(coin: str, request: ClosePositionRequest):
                         name=actual_coin,
                         is_buy=is_buy_to_close,
                         sz=shortfall,
-                        limit_px=round(current_price * (1.002 if is_buy_to_close else 0.998), 0),  # Small buffer
+                        limit_px=round_price(current_price * (1.002 if is_buy_to_close else 0.998), sz_decimals),  # Small buffer
                         order_type={"limit": {"tif": "Ioc"}},
                         reduce_only=True,
                         cloid=None
