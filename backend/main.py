@@ -1,17 +1,19 @@
-"""TradeLab API: the trading journal, position sizing, and the Hyperliquid integration.
+"""TradeLab: the API (trading journal, Hyperliquid integration) and, once built, the app itself.
 
-Run with `python main.py`. It listens on localhost only (see the local-only middleware below).
+Run with `python main.py`, or `python start.py` from the repository root, which also installs and
+builds what's needed. It listens on localhost only (see the local-only middleware below).
 """
 
 import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 load_dotenv()
 
@@ -120,6 +122,34 @@ async def local_only(request: Request, call_next):
 for module in (system, portfolio, mode, trades, analytics, hyperliquid, connection):
     app.include_router(module.router)
 
+# The built app (`npm run build`), served from the same origin as the API. In development the Vite dev
+# server serves it instead and proxies /api here.
+FRONTEND_DIST = Path(os.getenv("TRADELAB_FRONTEND_DIST", Path(__file__).resolve().parent.parent / "frontend" / "dist"))
+
+
+@app.get("/{path:path}", include_in_schema=False)
+def frontend(path: str):
+    """Serve a built file, or the app's index.html for its own routes (/trade, /settings, ...)."""
+    if path == "api" or path.startswith("api/"):
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})
+    dist = FRONTEND_DIST.resolve()
+    index = dist / "index.html"
+    if not index.is_file():
+        return JSONResponse(status_code=404, content={
+            "detail": "The app isn't built yet. Run `python start.py` from the repository root, "
+                      "or `npm run build` in frontend/.",
+        })
+    file = (dist / path).resolve()
+    if path and file.is_file() and file.is_relative_to(dist):
+        # Built assets have content hashes in their names, so they can be cached for good
+        cache = "public, max-age=31536000, immutable" if file.parent.name == "assets" else "no-cache"
+        return FileResponse(file, headers={"Cache-Control": cache})
+    if "." in path.rsplit("/", 1)[-1]:
+        return JSONResponse(status_code=404, content={"detail": "Not Found"})  # a missing file, not a route
+    return FileResponse(index, headers={"Cache-Control": "no-cache"})
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning", access_log=False)
+    port = int(os.getenv("TRADELAB_PORT", "8000"))
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning", access_log=False)

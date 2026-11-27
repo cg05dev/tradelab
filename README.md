@@ -33,34 +33,22 @@ places the orders, and keeps the journal in step with what actually fills on the
 ### Prerequisites
 
 - Python 3.10+
-- Node.js 18+
+- Node.js 18+ (to build the app)
 
-### Installation
+### Install and run
 
 ```bash
 git clone https://github.com/cg05dev/tradelab.git
 cd tradelab
-
-# Backend
-cd backend
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-# Frontend
-cd ../frontend
-npm install
+python start.py        # on some systems: python3 start.py
 ```
 
-### Running
+That's it. The first run sets everything up, which takes a few minutes: it creates a Python virtual
+environment, installs the backend's and frontend's dependencies, and builds the app. Then it opens
+TradeLab at **http://localhost:8000**. Later runs start in seconds, and redo only what changed (after a
+`git pull`, for example). Stop it with Ctrl+C.
 
-```bash
-# Terminal 1: the API on http://localhost:8000
-cd backend && source venv/bin/activate && python main.py
-
-# Terminal 2: the app on http://localhost:3001 (proxies /api to the backend)
-cd frontend && npm run dev
-```
+Options: `--port 8001` to use another port, `--no-browser` to not open a browser.
 
 On first start, choose **Connect a Hyperliquid account** or **Start paper trading**.
 
@@ -87,6 +75,7 @@ Everything is optional. Put settings in `backend/.env`:
 | `TRADELAB_CORS_ORIGINS` | the Vite dev server | Comma-separated origins allowed to call the API |
 | `TRADELAB_FILL_SYNC_SECONDS` | `15` | How often live trades are checked against Hyperliquid fills (`0` turns it off) |
 | `TRADELAB_PAPER_SIM_SECONDS` | `5` | How often open paper trades are checked against mainnet prices (`0` turns it off) |
+| `TRADELAB_PORT` | `8000` | Port TradeLab listens on (always on localhost) |
 | `TRADELAB_DB_FILE` | `backend/tradelab.db` | Location of the SQLite database |
 | `TRADELAB_LOG_LEVEL` | `INFO` | `DEBUG` logs order and exchange diagnostics |
 
@@ -102,6 +91,19 @@ HYPERLIQUID_USE_TESTNET=true
 ```
 
 ## Development
+
+For working on the code, run the backend and the Vite dev server separately, so frontend changes
+reload instantly:
+
+```bash
+# Terminal 1: the API on http://localhost:8000
+cd backend && source venv/bin/activate && python main.py   # Windows: venv\Scripts\activate
+
+# Terminal 2: the app with hot reload on http://localhost:3001 (proxies /api to the backend)
+cd frontend && npm run dev
+```
+
+Checks:
 
 ```bash
 # Backend: lint and tests
@@ -126,8 +128,9 @@ The planner's sizing and liquidation math (`frontend/src/trading.ts`) is covered
 
 ```
 tradelab/
+├── start.py                   # One-command setup and start
 ├── backend/
-│   ├── main.py                # App setup: local-only guard, CORS, routers, background jobs
+│   ├── main.py                # App setup: local-only guard, routers, background jobs, serving the built app
 │   ├── routers/               # One APIRouter per area: trades, analytics, portfolio, mode,
 │   │                          #   hyperliquid, connection, system
 │   ├── storage.py             # SQLite persistence (and the one-time import of old CSV journals)

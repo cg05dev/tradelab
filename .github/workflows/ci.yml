@@ -29,7 +29,7 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Lint
-        run: ruff check .
+        run: ruff check . ../start.py --config ruff.toml
 
       - name: Run tests
         run: pytest -v -W error::FutureWarning
