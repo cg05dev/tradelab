@@ -77,6 +77,9 @@ Everything is optional. Put settings in `backend/.env`:
 | `TRADELAB_PAPER_SIM_SECONDS` | `5` | How often open paper trades are checked against mainnet prices (`0` turns it off) |
 | `TRADELAB_PORT` | `8000` | Port TradeLab listens on (always on localhost) |
 | `TRADELAB_DB_FILE` | `backend/tradelab.db` | Location of the SQLite database |
+| `TRADELAB_BACKUP_DIR` | `backups/` next to the database | Where database backups are kept |
+| `TRADELAB_BACKUP_HOURS` | `24` | How often the database is backed up (`0` turns it off) |
+| `TRADELAB_BACKUP_KEEP` | `14` | How many backups to keep |
 | `TRADELAB_LOG_LEVEL` | `INFO` | `DEBUG` logs order and exchange diagnostics |
 
 On a machine without a keychain (e.g. a headless server), the Hyperliquid connection can be configured
@@ -134,6 +137,7 @@ tradelab/
 │   ├── routers/               # One APIRouter per area: trades, analytics, portfolio, mode,
 │   │                          #   hyperliquid, connection, system
 │   ├── storage.py             # SQLite persistence (and the one-time import of old CSV journals)
+│   ├── backup.py              # Daily and pre-migration database backups
 │   ├── connection.py          # Connected account (SQLite) and API wallet key (OS keychain)
 │   ├── hyperliquid_client.py  # Hyperliquid API client: prices, account value, orders, fills, fees
 │   ├── fill_sync.py           # Applies Hyperliquid fills to the live journal
@@ -217,7 +221,13 @@ tradelab/
 - **SQLite, not a database server.** It's a single-user local app, so an embedded database fits: one
   file, nothing to run, part of Python's standard library. Each write is a transaction, and closing a
   trade updates the trade and the paper balance together. Trade ids are scoped to their mode, so an id
-  from the paper journal can never touch a live trade.
+  from the paper journal can never touch a live trade. The database uses write-ahead logging, so the
+  background jobs and API requests can read while another writes, and a writer waits for its turn
+  instead of failing.
+- **The journal is backed up.** TradeLab copies the database once a day (at startup if the last copy is
+  older than that) and before any schema migration, keeping the newest 14 copies in `backend/backups/`.
+  Each copy is checked for integrity before it counts. To restore one, stop TradeLab, delete
+  `tradelab.db-wal` and `tradelab.db-shm` if they exist, and copy the backup over `backend/tradelab.db`.
 
 ## API
 
