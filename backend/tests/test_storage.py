@@ -51,7 +51,7 @@ class TestLegacyImport:
     def test_fresh_install_starts_empty(self, data_dir):
         assert storage.load_trades("live").empty
         assert storage.load_portfolio_size("live") == 0
-        assert storage.load_mode() == "live"
+        assert storage.load_mode() == "paper"
 
 
 class TestTransactions:

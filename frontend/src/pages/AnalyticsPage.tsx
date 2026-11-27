@@ -203,7 +203,7 @@ export default function AnalyticsPage() {
                     <span className="font-medium text-white">{trade.Asset}</span>
                     <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${isLong ? 'border-green-500/30 bg-green-500/10 text-green-400' : 'border-red-500/30 bg-red-500/10 text-red-400'}`}>{isLong ? 'Long' : 'Short'}</span>
                   </div>
-                  <span className="text-xs tabular-nums text-neutral-400">{formatTradeDate(trade.Date)}</span>
+                  <span className="text-xs tabular-nums text-neutral-400">{formatTradeDate(trade.Closed_At ?? trade.Date)}</span>
                   <div className="flex items-center gap-2 text-sm tabular-nums text-neutral-300"><span>{formatCurrency(trade.Entry ?? 0)}</span><span className="text-neutral-600">→</span><span>{formatCurrency(trade.Exit_Price ?? 0)}</span></div>
                   <span className="w-fit rounded bg-neutral-800 px-2 py-0.5 text-xs tabular-nums text-neutral-300">{trade.Leverage ?? '—'}x</span>
                   <div className={`text-right font-semibold tabular-nums ${pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>

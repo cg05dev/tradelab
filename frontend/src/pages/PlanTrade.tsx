@@ -3,17 +3,16 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { addTrade } from '../api/trades'
 import { getPortfolio } from '../api/portfolio'
-import { getHyperliquidPrice, placeHyperliquidOrder, getHyperliquidAssets, getFeeRates, type FeeRates } from '../api/hyperliquid'
+import { getHyperliquidPrice, placeHyperliquidOrder, getHyperliquidAssets, getFeeRates } from '../api/hyperliquid'
 import { getErrorMessage } from '../api/error'
-import { liquidationPrice as estimateLiquidation } from '../trading'
+import { DEFAULT_FEES, DEFAULT_MAX_LEVERAGE, planTrade } from '../trading'
 import { getConnection } from '../api/connection'
 import { useMode, type UITradingMode } from '../contexts/ModeContext'
 import type { HyperliquidAsset, TakeProfit, TradeDetails, HyperliquidOrderRequest } from '../types'
 
-// Hyperliquid's base tier, used until the account's own rates load (slightly high, so never undersized risk)
-const DEFAULT_FEES: FeeRates = { taker: 0.00045, maker: 0.00015, stop_slippage: 0.0005, source: 'default' }
 const MAX_LIVE_RISK_PERCENT = 5
-const normalizeMode = (value?: string | null): UITradingMode => value === 'paper' ? 'paper' : 'live'
+// Anything unexpected is treated as paper, never as real money
+const normalizeMode = (value?: string | null): UITradingMode => value === 'live' ? 'live' : 'paper'
 // The form edits allocations as percentages; the API and journal store fractions of the position (0-1)
 const toApiLevels = (levels: TakeProfit[]): TakeProfit[] =>
   levels.map(({ price, allocation }) => ({ price, allocation: allocation / 100 }))
@@ -76,56 +75,23 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     return () => window.clearTimeout(timeout)
   }, [toast])
 
+  const maxLeverage = assetsQuery.data?.find((item) => item.symbol === asset.split('-')[0])?.max_leverage ?? DEFAULT_MAX_LEVERAGE
+
   const tradeDetails = useMemo<TradeDetails | null>(() => {
     if (!currentPrice) return null
-
     // No made-up default: with no balance, nothing is sized (and live orders are blocked below)
-    const portfolioSize = portfolioQuery.data?.portfolio_size ?? 0
-    const riskAmount = portfolioSize * riskPercentage / 100
-    const liquidationPrice = estimateLiquidation(currentPrice, leverage, direction)
-    const isStopLossValid = Boolean(stopLoss && stopLoss > 0 && (
-      direction === 'long'
-        ? stopLoss > liquidationPrice && stopLoss < currentPrice
-        : stopLoss < liquidationPrice && stopLoss > currentPrice
-    ))
-    const riskDistancePercent = isStopLossValid && stopLoss
-      ? Math.abs(currentPrice - stopLoss) / currentPrice
-      : Math.abs(currentPrice - liquidationPrice) / currentPrice
-    // A stopped-out trade pays the taker fee on entry and on the stop, and fills a little past the
-    // stop. Size so the loss at the stop, including those, is the risk amount.
-    const fees = feesQuery.data ?? DEFAULT_FEES
-    const costAtStop = 2 * fees.taker + fees.stop_slippage
-    const positionSizeDollars = riskAmount / (riskDistancePercent + costAtStop)
-    const positionSize = positionSizeDollars / currentPrice
-    const marginRequired = positionSizeDollars / leverage
-    // Targets are resting limit orders: the entry's taker fee plus a maker fee at the target
-    const tpProfits = takeProfits
-      .filter((tp) => tp.price > 0 && tp.allocation > 0)
-      .map((tp, index) => {
-        const share = tp.allocation / 100
-        const gross = (tp.price - currentPrice) * positionSize * share * (direction === 'short' ? -1 : 1)
-        const tpFees = positionSizeDollars * share * fees.taker + tp.price * positionSize * share * fees.maker
-        return { ...tp, index: index + 1, profit: gross - tpFees }
-      })
-    const estimatedProfit = tpProfits.reduce((sum, tp) => sum + tp.profit, 0)
-
-    return {
-      liquidationPrice,
-      positionSize,
-      positionSizeDollars,
-      marginRequired,
-      riskRewardRatio: riskAmount > 0 ? estimatedProfit / riskAmount : 0,
-      estimatedLoss: riskAmount,
-      estimatedProfit,
-      tpProfits,
-      positionValue: positionSizeDollars,
-      currentPrice,
-      isStopLossValid,
-      priceLossAtStop: positionSizeDollars * riskDistancePercent,
-      feesAtStop: positionSizeDollars * 2 * fees.taker,
-      slippageAtStop: positionSizeDollars * fees.stop_slippage,
-    }
-  }, [currentPrice, direction, feesQuery.data, leverage, portfolioQuery.data?.portfolio_size, riskPercentage, takeProfits, stopLoss])
+    return planTrade({
+      price: currentPrice,
+      portfolioSize: portfolioQuery.data?.portfolio_size ?? 0,
+      riskPercent: riskPercentage,
+      leverage,
+      direction,
+      stopLoss,
+      takeProfits,
+      fees: feesQuery.data ?? DEFAULT_FEES,
+      maxLeverage,
+    })
+  }, [currentPrice, direction, feesQuery.data, leverage, maxLeverage, portfolioQuery.data?.portfolio_size, riskPercentage, takeProfits, stopLoss])
 
   const executeMutation = useMutation({
     mutationFn: async (): Promise<{ warnings: string[] }> => {
@@ -209,7 +175,6 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
     },
   })
 
-  const maxLeverage = assetsQuery.data?.find((item) => item.symbol === asset.split('-')[0])?.max_leverage ?? 50
   const validTargets = tradeDetails?.tpProfits ?? []
   const hasStop = Boolean(stopLoss && tradeDetails?.isStopLossValid)
   const stopDistance = stopLoss && currentPrice ? Math.abs(stopLoss - currentPrice) / currentPrice * 100 : null

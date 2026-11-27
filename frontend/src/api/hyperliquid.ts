@@ -3,6 +3,9 @@ import type { HyperliquidOrderRequest, HyperliquidOrderResponse } from '../types
 
 export const getHyperliquidPrice = (coin: string) => api.get(`/api/hyperliquid/price/${coin}`)
 export const getHyperliquidAssets = () => api.get('/api/hyperliquid/assets')
+// The connected account's open positions, with Hyperliquid's own liquidation price
+export type HyperliquidPosition = { coin: string; size: number; liquidation_price: number | null }
+export const getHyperliquidPositions = () => api.get<{ positions: HyperliquidPosition[] }>('/api/hyperliquid/positions')
 export const placeHyperliquidOrder = (orderData: HyperliquidOrderRequest) => api.post<HyperliquidOrderResponse>('/api/hyperliquid/order', orderData)
 export type ClosePositionResponse = {
   status: string
@@ -21,7 +24,8 @@ export const closeHyperliquidPosition = (coin: string, size?: number, tradeIndex
     ...(tradeIndex != null ? { trade_index: tradeIndex } : {}),
   })
 // Fee rates and stop slippage the planner sizes with: the connected account's, else Hyperliquid's base tier
-export type FeeRates = { taker: number; maker: number; stop_slippage: number; source: 'account' | 'default' }
+import type { FeeRates } from '../trading'
+export type { FeeRates }
 export const getFeeRates = () => api.get<FeeRates>('/api/hyperliquid/fees')
 // Apply new Hyperliquid fills (TP/SL hits) to the open live journal trades now
 export const syncHyperliquidFills = () =>

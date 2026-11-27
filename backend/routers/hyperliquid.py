@@ -97,6 +97,14 @@ def get_hyperliquid_price(coin: str):
     return {"coin": coin.upper(), "price": price, "timestamp": datetime.now().isoformat()}
 
 
+@router.get("/positions")
+def get_hyperliquid_positions():
+    """The connected account's open positions, with Hyperliquid's own liquidation price for each."""
+    if not hl_client or not hl_client.enabled:
+        raise HTTPException(status_code=503, detail="No Hyperliquid account connected. Connect one in Settings.")
+    return {"positions": hl_client.get_positions()}
+
+
 @router.get("/assets")
 def get_hyperliquid_assets():
     """Get available assets and their max leverage from Hyperliquid (public; no account needed)"""

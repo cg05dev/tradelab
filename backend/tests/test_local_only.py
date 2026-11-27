@@ -42,6 +42,6 @@ def test_changes_require_the_client_header(data_dir):
     bare = TestClient(main.app, base_url="http://localhost")
 
     assert bare.get("/api/mode").status_code == 200
-    assert bare.post("/api/mode", json={"mode": "paper"}).status_code == 403
+    assert bare.post("/api/mode", json={"mode": "live"}).status_code == 403
     assert bare.put("/api/connection", json={"account_address": "0x" + "1" * 40}).status_code == 403
-    assert bare.get("/api/mode").json()["mode"] == "live"
+    assert bare.get("/api/mode").json()["mode"] == "paper"

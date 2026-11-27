@@ -1,12 +1,13 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { getOpenTrades, closeTrade } from '../api/trades'
-import { getHyperliquidPrice, closeHyperliquidPosition, syncHyperliquidFills } from '../api/hyperliquid'
+import { getHyperliquidPrice, getHyperliquidAssets, getHyperliquidPositions, closeHyperliquidPosition, syncHyperliquidFills } from '../api/hyperliquid'
 import { useMode, type UITradingMode } from '../contexts/ModeContext'
 import { getErrorMessage } from '../api/error'
 import { formatPrice } from '../format'
 import { liquidationPrice } from '../trading'
-import type { Trade } from '../types'
+import type { HyperliquidAsset, Trade } from '../types'
 
 // `mode` is the journal the trade was loaded from, so actions never apply it to the other mode
 type TradeWithIndex = Trade & { index: number; mode: UITradingMode }
@@ -30,6 +31,20 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
 
   const [loading, setLoading] = useState(true)
   const [currentPrices, setCurrentPrices] = useState<Record<string, number>>({})
+  // Each asset's max leverage sets its maintenance margin, for the paper liquidation estimate
+  const assetsQuery = useQuery<HyperliquidAsset[]>({
+    queryKey: ['hyperliquid-assets'],
+    queryFn: async () => (await getHyperliquidAssets()).data?.assets || [],
+    staleTime: 60 * 60_000,
+  })
+  // Live trades show the exchange's own liquidation price for their position
+  const positionsQuery = useQuery({
+    queryKey: ['hyperliquid-positions'],
+    queryFn: async () => (await getHyperliquidPositions()).data?.positions ?? [],
+    enabled: mode === 'live',
+    refetchInterval: 15_000,
+    retry: false,
+  })
   const isInitialMount = useRef(true)
 
   // Fetch current prices for all open trades
@@ -136,11 +151,18 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
     }
   }
 
-  const calculateLiquidationPrice = (trade: Trade) => {
+  // Live: Hyperliquid's liquidation price for the position. Paper (or until it loads): the estimate.
+  const calculateLiquidationPrice = (trade: Trade): { price: number; fromExchange: boolean } | null => {
+    const coin = (trade.Asset ?? '').split('-')[0]?.toUpperCase() ?? ''
+    if (mode === 'live') {
+      const position = positionsQuery.data?.find((p) => p.coin.toUpperCase() === coin && p.size)
+      if (position?.liquidation_price) return { price: position.liquidation_price, fromExchange: true }
+    }
     const entry = typeof trade.Entry === 'number' ? trade.Entry : parseFloat(String(trade.Entry ?? 0))
     const leverage = typeof trade.Leverage === 'number' ? trade.Leverage : parseFloat(String(trade.Leverage ?? 0)) || 1
     if (!entry || !leverage) return null
-    return liquidationPrice(entry, leverage, trade.Direction)
+    const maxLeverage = assetsQuery.data?.find((a) => a.symbol.toUpperCase() === coin)?.max_leverage
+    return { price: liquidationPrice(entry, leverage, trade.Direction, maxLeverage), fromExchange: false }
   }
 
   const handleCloseTrade = useCallback(async (): Promise<void> => {
@@ -327,8 +349,8 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
                     <span>Margin: ${margin?.toFixed(0) || '-'}</span>
                   </div>
                   {liqPrice && (
-                    <div className="text-neutral-500 mt-1">
-                      Liq: {formatPrice(liqPrice)}
+                    <div className="text-neutral-500 mt-1" title={liqPrice.fromExchange ? "Hyperliquid's liquidation price for this position" : 'Estimated from entry, leverage and the asset\'s maintenance margin'}>
+                      Liq: {formatPrice(liqPrice.price)}{liqPrice.fromExchange ? '' : ' (est.)'}
                     </div>
                   )}
                 </div>

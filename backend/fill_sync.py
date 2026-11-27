@@ -302,6 +302,7 @@ def _journal_fields(trade: Dict, rows: List[Dict], claims: Dict) -> Dict:
             "Status": "Closed",
             "Exit_Price": sum(r["price"] * r["size"] for r in closes) / closed_units,
             "Hold_Time": f"{(end_ms - start_ms) / 3_600_000:.1f}h",
+            "Closed_At": storage.local_time(end_ms),
             "Position_Size": total_units * entry,  # a closed trade keeps its full size, as manual closes do
         })
     return fields

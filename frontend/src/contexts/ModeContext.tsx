@@ -5,7 +5,8 @@ import { getMode, setMode as setModeApi } from '../api/mode'
 export const MODE_STORAGE_KEY = 'tradelab-mode'
 export type UITradingMode = 'paper' | 'live'
 
-const normalizeMode = (value?: string | null): UITradingMode => value === 'paper' ? 'paper' : 'live'
+// Anything unexpected (nothing stored yet, an old value) is paper, never real money
+const normalizeMode = (value?: string | null): UITradingMode => value === 'live' ? 'live' : 'paper'
 
 interface ModeContextType {
   mode: UITradingMode
@@ -18,7 +19,7 @@ const ModeContext = createContext<ModeContextType | null>(null)
 export function ModeProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
   const [mode, setModeState] = useState<UITradingMode>(() => {
-    if (typeof window === 'undefined') return 'live'
+    if (typeof window === 'undefined') return 'paper'
     return normalizeMode(window.localStorage.getItem(MODE_STORAGE_KEY))
   })
   const [isLoading, setIsLoading] = useState(false)
