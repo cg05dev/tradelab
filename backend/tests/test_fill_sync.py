@@ -73,6 +73,7 @@ class TestStopLossOnTheExchange:
         assert not t["TP_Hit"]
         assert t["Position_Size"] == pytest.approx(0.00246 * 60_591)
         assert t["Hold_Time"] == "0.1h"
+        assert t["Closed_At"] == storage.local_time(T0 + 5 * MINUTE)
 
     def test_running_again_changes_nothing(self, exchange):
         trade_id = journal()

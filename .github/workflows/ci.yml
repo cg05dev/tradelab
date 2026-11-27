@@ -35,7 +35,7 @@ jobs:
         run: pytest -v -W error::FutureWarning
 
   frontend:
-    name: Frontend lint, type-check and build
+    name: Frontend lint, type-check, tests and build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -58,6 +58,9 @@ jobs:
 
       - name: Type-check
         run: npm run typecheck
+
+      - name: Test
+        run: npm test
 
       - name: Build
         run: npm run build

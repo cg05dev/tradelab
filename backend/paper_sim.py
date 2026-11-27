@@ -7,7 +7,8 @@ for every open paper trade and fills its exits the way Hyperliquid would:
 - a take profit (a resting limit order) fills at its price, paying the maker fee;
 - the stop (a stop-market order) fills past its price by the planned slippage, or at the price the
   market had already reached if it gapped through; it pays the taker fee;
-- with no stop, the trade is liquidated at its liquidation price.
+- with no stop, the trade is liquidated at its liquidation price (risk.py), using the asset's own
+  maintenance margin.
 
 Entering paid the taker fee (`charge_entry`). Every fill moves the paper balance, so paper P&L is
 what the same trade would have made live, fees included.
@@ -28,12 +29,13 @@ import requests
 import fees
 import storage
 from fill_sync import _levels, _opened_ms, coin_of
-from risk import liquidation_price
+from risk import DEFAULT_MAX_LEVERAGE, liquidation_price
 
 logger = logging.getLogger(__name__)
 
 MAINNET_INFO = "https://api.hyperliquid.xyz/info"
 CANDLE_CHECK_MS = 60_000
+META_REFRESH_SECONDS = 3600
 CLOSED_FRACTION = 1e-4
 
 _lock = threading.Lock()
@@ -41,6 +43,25 @@ _lock = threading.Lock()
 
 class MainnetMarket:
     """Public mainnet prices. Paper trading always simulates mainnet, whatever account is connected."""
+
+    def __init__(self):
+        self._max_leverage: Dict[str, float] = {}
+        self._max_leverage_at = 0.0
+
+    def max_leverage(self, coin: str) -> Optional[float]:
+        """The asset's maximum leverage, which sets its maintenance margin. Refreshed hourly."""
+        if time.time() - self._max_leverage_at > META_REFRESH_SECONDS:
+            try:
+                response = requests.post(MAINNET_INFO, json={"type": "meta"}, timeout=10)
+                response.raise_for_status()
+                self._max_leverage = {
+                    asset["name"].upper(): float(asset["maxLeverage"])
+                    for asset in response.json().get("universe", []) if asset.get("maxLeverage")
+                }
+                self._max_leverage_at = time.time()
+            except Exception as e:
+                logger.warning(f"Could not fetch mainnet max leverage, assuming {DEFAULT_MAX_LEVERAGE}x: {e}")
+        return self._max_leverage.get(coin.upper())
 
     def mids(self) -> Dict[str, float]:
         response = requests.post(MAINNET_INFO, json={"type": "allMids"}, timeout=10)
@@ -93,6 +114,7 @@ def step(market=None, rates: Optional[Dict] = None, now_ms: Optional[int] = None
         updated, closed = set(), []
         for trade in trades:
             coin = trade["coin"]
+            trade["max_leverage"] = market.max_leverage(coin)
             # Candles first (older prices), then the current mid
             observations: List[Dict] = []
             if now_ms - trade["checked_ms"] >= CANDLE_CHECK_MS:
@@ -166,7 +188,7 @@ def _apply(trade: Dict, price: Dict, rates: Dict) -> bool:
         beyond = lambda a, b: a >= b  # noqa: E731
 
     stop = trade["sl"]
-    liquidation = liquidation_price(trade["entry"], trade["leverage"], trade["direction"])
+    liquidation = liquidation_price(trade["entry"], trade["leverage"], trade["direction"], trade.get("max_leverage"))
     if stop > 0 and not beyond(stop, liquidation):
         if adverse_reached(stop):
             slipped = stop * (1 - rates["stop_slippage"]) if long else stop * (1 + rates["stop_slippage"])
@@ -221,6 +243,7 @@ def _fill(trade: Dict, price: float, units: float, fee_rate: float, kind: str):
             "Status": "Closed",
             "Exit_Price": trade["exit_value"] / trade["exit_units"],
             "Hold_Time": f"{max(hold_hours, 0):.1f}h",
+            "Closed_At": storage.local_time(trade["now_ms"]),
             "Position_Size": trade["units_total"] * trade["entry"],
         })
 

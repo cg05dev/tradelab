@@ -4,7 +4,7 @@ from typing import Optional
 import pandas as pd
 from fastapi import APIRouter
 
-from storage import load_mode, load_trades
+from storage import closed_dates, load_mode, load_trades
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +12,7 @@ router = APIRouter(prefix="/api/analytics", tags=["analytics"])
 
 
 def apply_timeframe_filter(df, timeframe):
+    """Keep the trades whose 'Date' column (here: when they closed) falls in the timeframe."""
     timeframe = (timeframe or 'all').lower()
     if df.empty or 'Date' not in df.columns:
         return df
@@ -41,8 +42,9 @@ def get_analytics_metrics(timeframe: str = 'all', mode: Optional[str] = None):
         closed = df[df['Status'] == 'Closed'].copy()
         if closed.empty:
             return {"total_pnl": 0, "win_rate": 0, "avg_win": 0, "avg_loss": 0}
-        closed['Date'] = pd.to_datetime(closed['Date'], errors='coerce')
-        closed = apply_timeframe_filter(closed, timeframe)
+        # P&L counts when it was realized: filter and order by close date
+        closed['Date'] = closed_dates(closed)
+        closed = apply_timeframe_filter(closed, timeframe).sort_values('Date', kind='stable')
         pnl_series = pd.to_numeric(closed['P&L'], errors='coerce').fillna(0)
         total_pnl = float(pnl_series.sum())
         wins = pnl_series[pnl_series > 0]
@@ -82,11 +84,11 @@ def get_pnl_series(timeframe: str = 'all', mode: Optional[str] = None):
         closed = df[df['Status'] == 'Closed'].copy()
         if closed.empty:
             return []
-        closed['Date'] = pd.to_datetime(closed['Date'], errors='coerce')
+        closed['Date'] = closed_dates(closed)
         closed = apply_timeframe_filter(closed, timeframe)
         if closed.empty:
             return []
-        closed = closed.sort_values('Date')
+        closed = closed.sort_values('Date', kind='stable')
         closed['P&L'] = pd.to_numeric(closed['P&L'], errors='coerce').fillna(0)
         closed['cumulative_pnl'] = closed['P&L'].cumsum()
         return [

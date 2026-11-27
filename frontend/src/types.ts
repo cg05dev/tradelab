@@ -52,6 +52,8 @@ export type Trade = {
   Confirmations?: string
   Thesis?: string
   Date?: string
+  // When the trade fully closed (journal local time)
+  Closed_At?: string | null
   'P&L'?: number
 }
 // Allocations in API requests and stored trades are fractions of the position (0-1), not percentages

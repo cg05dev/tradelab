@@ -12,10 +12,14 @@ MINUTE = 60_000
 
 
 class FakeMarket:
-    def __init__(self, mid=None, candles=()):
+    def __init__(self, mid=None, candles=(), max_leverage=40):
         self.prices = {"BTC": mid} if mid is not None else {}
         self.candle_list = list(candles)
         self.candle_calls = []
+        self.max_lev = max_leverage
+
+    def max_leverage(self, coin):
+        return self.max_lev
 
     def mids(self):
         return dict(self.prices)
@@ -100,13 +104,24 @@ class TestStop:
 
     def test_without_a_stop_the_trade_is_liquidated(self, paper):
         trade_id = open_trade(paper, sl=0, tps=())
-        liquidation = 100 * (1 - (1 / 10 - 0.0125))
+        liquidation = 100 * (1 - 1 / 10) / (1 - 0.0125)  # 10x on BTC (40x max: 1.25% maintenance)
 
         step(FakeMarket(mid=91), trade_id)
 
         assert trade(trade_id)["Status"] == "Closed"
         assert trade(trade_id)["Exit_Price"] == pytest.approx(liquidation)
         assert not trade(trade_id)["SL_Hit"]
+
+    def test_liquidation_uses_the_assets_maintenance_margin(self, paper):
+        """5x survives 84 with BTC's 1.25% maintenance (liquidation 81.01), not with a 10x-max asset's 5% (84.21)."""
+        trade_id = open_trade(paper, sl=0, tps=(), leverage=5)
+
+        step(FakeMarket(mid=84, max_leverage=40), trade_id, after_ms=1_000)
+        assert trade(trade_id)["Status"] == "Open"
+
+        step(FakeMarket(mid=84, max_leverage=10), trade_id, after_ms=2_000)
+        assert trade(trade_id)["Status"] == "Closed"
+        assert trade(trade_id)["Exit_Price"] == pytest.approx(100 * 0.8 / 0.95)
 
     def test_short(self, paper):
         trade_id = open_trade(paper, direction="short", sl=105, tps=((90, 1.0),))

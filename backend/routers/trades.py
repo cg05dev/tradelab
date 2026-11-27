@@ -12,14 +12,14 @@ import paper_sim
 from models import CloseTradeRequest, TradeData
 from storage import (
     clean_trade_data,
+    closed_dates,
     insert_trade,
     load_mode,
     load_trades,
+    local_time,
     update_trade,
 )
-from storage import (
-    delete_trade as delete_trade_row,
-)
+from storage import delete_trade as delete_trade_row
 
 logger = logging.getLogger(__name__)
 
@@ -86,15 +86,20 @@ def get_closed_trades(asset=None, start=None, end=None, sort=None, page=None, li
         if asset:
             closed_trades = closed_trades[closed_trades['Asset'].astype(str).str.contains(asset, case=False, na=False)]
 
+        # Dates refer to when a trade closed. A date-only `end` includes that whole day.
+        closed_trades['_closed'] = closed_dates(closed_trades)
         if start:
             start_dt = pd.to_datetime(start, errors='coerce')
             if pd.notna(start_dt):
-                closed_trades = closed_trades[pd.to_datetime(closed_trades['Date'], errors='coerce') >= start_dt]
+                closed_trades = closed_trades[closed_trades['_closed'] >= start_dt]
 
         if end:
             end_dt = pd.to_datetime(end, errors='coerce')
             if pd.notna(end_dt):
-                closed_trades = closed_trades[pd.to_datetime(closed_trades['Date'], errors='coerce') <= end_dt]
+                if len(str(end).strip()) == 10:
+                    closed_trades = closed_trades[closed_trades['_closed'] < end_dt + pd.Timedelta(days=1)]
+                else:
+                    closed_trades = closed_trades[closed_trades['_closed'] <= end_dt]
 
         if search:
             search_lower = search.lower()
@@ -107,12 +112,11 @@ def get_closed_trades(asset=None, start=None, end=None, sort=None, page=None, li
             closed_trades = closed_trades.sort_values(by='P&L', ascending=False)
         elif sort == 'pnl_asc':
             closed_trades = closed_trades.sort_values(by='P&L', ascending=True)
-        elif sort == 'date_desc':
-            closed_trades = closed_trades.sort_values(by='Date', ascending=False)
         elif sort == 'date_asc':
-            closed_trades = closed_trades.sort_values(by='Date', ascending=True)
-        else:
-            closed_trades = closed_trades.sort_values(by='Date', ascending=False)
+            closed_trades = closed_trades.sort_values(by='_closed', ascending=True)
+        else:  # date_desc, the default
+            closed_trades = closed_trades.sort_values(by='_closed', ascending=False)
+        closed_trades = closed_trades.drop(columns='_closed')
 
         total_count = len(closed_trades)
         if page is not None or limit is not None:
@@ -166,7 +170,7 @@ def add_trade(trade_data: TradeData, mode: Optional[str] = None):
                     raise HTTPException(status_code=400, detail=f"Take profit {tp.price} must be below entry price for short positions")
 
         new_trade = {
-            'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'Date': local_time(),
             'Asset': trade_data.asset.strip(),
             'Direction': trade_data.direction.lower(),
             'Entry': float(trade_data.entry_price),
@@ -246,6 +250,7 @@ def close_trade(request: CloseTradeRequest, mode: Optional[str] = None):
     prior_pnl = trade['P&L'] if pd.notna(trade['P&L']) else 0.0
     updates['P&L'] = prior_pnl + pnl
     updates['Hold_Time'] = f"{hold_time:.1f}h"
+    updates['Closed_At'] = local_time()
 
     # Update portfolio size
     portfolio_delta = pnl

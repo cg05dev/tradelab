@@ -18,7 +18,7 @@ places the orders, and keeps the journal in step with what actually fills on the
 - **Paper trading on real prices**: paper trades are filled against Hyperliquid mainnet prices, with
   the same fees and stop slippage as live, so paper results are a realistic preview.
 - **Analytics**: win rate, P&L, profit factor, max drawdown, equity and drawdown charts by timeframe, and
-  a searchable, sortable trade history.
+  a searchable, sortable trade history. Results count on the day a trade closed, when its P&L was realized.
 - **Paper and live kept apart**: separate journals and balances; the live balance is always the
   connected account's value. Testnet accounts are badged so a test order is never mistaken for a real one.
 
@@ -110,15 +110,17 @@ pip install -r requirements-dev.txt
 ruff check .
 pytest
 
-# Frontend: lint, type-check and build
+# Frontend: lint, type-check, tests and build
 cd frontend
 npm run lint
 npm run typecheck
+npm test
 npm run build
 ```
 
-CI runs all of these on every pull request. Tests run against a temporary data directory and an in-memory
-keychain with the Hyperliquid client mocked out, so they never touch real money or your data.
+CI runs all of these on every pull request. Backend tests run against a temporary data directory and an
+in-memory keychain with the Hyperliquid client mocked out, so they never touch real money or your data.
+The planner's sizing and liquidation math (`frontend/src/trading.ts`) is covered by Vitest.
 
 ### Project Structure
 
@@ -134,7 +136,7 @@ tradelab/
 │   ├── fill_sync.py           # Applies Hyperliquid fills to the live journal
 │   ├── paper_sim.py           # Fills paper trades against mainnet prices
 │   ├── fees.py                # Fee rates and the cost of a stopped-out trade
-│   ├── risk.py                # Liquidation estimate
+│   ├── risk.py                # Liquidation price (Hyperliquid's formula)
 │   ├── models.py              # Shared Pydantic request models
 │   └── tests/                 # Pytest suite
 ├── frontend/src/
@@ -142,10 +144,10 @@ tradelab/
 │   ├── components/            # Layout, portfolio header, mode toggle, welcome screen
 │   ├── api/                   # Typed API client functions
 │   ├── contexts/              # Trading mode
-│   ├── trading.ts             # Liquidation estimate (same as backend/risk.py)
+│   ├── trading.ts             # Position sizing and liquidation price (same formula as backend/risk.py)
 │   ├── wallet.ts              # Browser wallet (EIP-1193) helpers
 │   └── router.tsx             # Routes and the first-run welcome gate
-└── .github/workflows/ci.yml   # CI: backend lint and tests, frontend lint, type-check and build
+└── .github/workflows/ci.yml   # CI: backend lint and tests; frontend lint, type-check, tests and build
 ```
 
 ## Design Decisions
@@ -153,12 +155,17 @@ tradelab/
 - **Risk-first position sizing.** You choose how much of the account to risk, not how big the position
   is. Position notional = risk amount ÷ (distance to the stop + fees + slippage), where the costs are two
   taker fees (entry and stop) and 0.05% of stop slippage. With no stop, the position is sized against the
-  estimated liquidation price, `entry × (1 ∓ (1/leverage − 1.25%))`, using Hyperliquid's maintenance
-  margin for BTC. Fee rates are your account's (tier and referral discount included) when one is
+  liquidation price. Fee rates are your account's (tier and referral discount included) when one is
   connected, otherwise Hyperliquid's base rates.
+- **Liquidation prices use each asset's maintenance margin.** Hyperliquid's maintenance margin is half
+  the initial margin at the asset's maximum leverage (1.25% for 40x BTC, 5% for a 10x asset), and an
+  isolated long is liquidated at `entry × (1 − 1/leverage) ÷ (1 − mm)` (a short mirrors it). The
+  planner rejects a stop beyond that price, since the position would be liquidated before the stop
+  fills. Open live trades show Hyperliquid's own liquidation price for the position; paper trades use
+  the formula. Large positions on assets with margin tiers liquidate somewhat sooner.
 - **The backend is the safety gate for real money.** The UI hides live actions in paper mode, but the
   API doesn't trust that: order and close endpoints refuse to run unless the persisted mode is `live`,
-  and the check fails closed for any other value. Orders are sized from a price the server fetches
+  and the check fails closed for any other value. Until you switch to live, the app is in paper mode. Orders are sized from a price the server fetches
   itself, not the price the browser sent.
 - **Market orders as IOC limits.** Hyperliquid has no true market order, so entries are
   immediate-or-cancel limits with a 0.2% buffer. Take profits are reduce-only resting limits and stop

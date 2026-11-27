@@ -30,8 +30,9 @@ def funded(client):
 
 
 class TestMode:
-    def test_defaults_to_live(self, client):
-        assert client.get("/api/mode").json() == {"mode": "live"}
+    def test_defaults_to_paper(self, client):
+        """Until a mode is chosen, nothing can reach real money."""
+        assert client.get("/api/mode").json() == {"mode": "paper"}
 
     def test_planning_is_an_alias_for_paper(self, client):
         assert client.post("/api/mode", json={"mode": "planning"}).json()["mode"] == "paper"
@@ -151,6 +152,20 @@ class TestClosedTradesAndAnalytics:
         series = history.get("/api/analytics/pnl-series?mode=paper").json()
 
         assert [p["cumulative_pnl"] for p in series] == pytest.approx([200, 0, 400])
+
+
+class TestPositions:
+    def test_returns_the_exchanges_positions(self, client, hl):
+        hl.get_positions.return_value = [{"coin": "BTC", "size": 0.01, "liquidation_price": 54_321.0}]
+
+        body = client.get("/api/hyperliquid/positions").json()
+
+        assert body["positions"][0]["liquidation_price"] == 54_321.0
+
+    def test_needs_a_connected_account(self, client, hl):
+        hl.enabled = False
+
+        assert client.get("/api/hyperliquid/positions").status_code == 503
 
 
 class TestFeeRates:

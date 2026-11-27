@@ -14,6 +14,7 @@ import math
 import os
 import sqlite3
 from contextlib import contextmanager
+from datetime import datetime
 from typing import Dict, Optional
 
 import pandas as pd
@@ -38,16 +39,21 @@ DATA_FILES = {
 }
 
 MODES = ('live', 'paper')
-DEFAULT_MODE = 'live'
+# Until a mode is chosen the app is in paper mode, so a fresh or reset install never lands on real money
+DEFAULT_MODE = 'paper'
+
+# Journal timestamps are local time in this format
+TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 JOURNAL_COLUMNS = [
     'Date', 'Asset', 'Direction', 'Entry', 'SL', 'TPs', 'SLs', 'Position_Size',
     'Confirmations', 'Thesis', 'Status', 'Exit_Price', 'P&L', 'Hold_Time',
-    'TP_Hit', 'TP_Price', 'SL_Hit', 'SL_Price', 'Hit_TPs', 'Margin', 'Leverage'
+    'TP_Hit', 'TP_Price', 'SL_Hit', 'SL_Price', 'Hit_TPs', 'Margin', 'Leverage', 'Closed_At'
 ]
 
 # Text columns that pandas would otherwise infer as float when every value is empty
-TEXT_COLUMNS = ['Date', 'Asset', 'Direction', 'TPs', 'SLs', 'Confirmations', 'Thesis', 'Status', 'Hold_Time', 'Hit_TPs']
+TEXT_COLUMNS = ['Date', 'Asset', 'Direction', 'TPs', 'SLs', 'Confirmations', 'Thesis', 'Status', 'Hold_Time', 'Hit_TPs',
+                'Closed_At']
 
 # Journal column -> SQL column
 SQL_COLUMNS = {
@@ -56,6 +62,7 @@ SQL_COLUMNS = {
     'Thesis': 'thesis', 'Status': 'status', 'Exit_Price': 'exit_price', 'P&L': 'pnl',
     'Hold_Time': 'hold_time', 'TP_Hit': 'tp_hit', 'TP_Price': 'tp_price', 'SL_Hit': 'sl_hit',
     'SL_Price': 'sl_price', 'Hit_TPs': 'hit_tps', 'Margin': 'margin', 'Leverage': 'leverage',
+    'Closed_At': 'closed_at',
 }
 BOOL_COLUMNS = ['TP_Hit', 'SL_Hit']
 
@@ -83,7 +90,8 @@ CREATE TABLE IF NOT EXISTS trades (
     sl_price      REAL,
     hit_tps       TEXT,
     margin        REAL,
-    leverage      INTEGER
+    leverage      INTEGER,
+    closed_at     TEXT     -- when the trade fully closed (local time, like date)
 );
 CREATE INDEX IF NOT EXISTS idx_trades_mode_status ON trades (mode, status);
 
@@ -147,6 +155,11 @@ def _connect():
 
 def _ensure_schema(conn):
     conn.executescript(SCHEMA)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(trades)")}
+    if 'closed_at' not in columns:
+        with conn:
+            conn.execute("ALTER TABLE trades ADD COLUMN closed_at TEXT")
+            _backfill_closed_at(conn)
     done = conn.execute("SELECT 1 FROM settings WHERE key = 'legacy_import_done'").fetchone()
     if not done:
         with conn:
@@ -157,6 +170,34 @@ def _ensure_schema(conn):
         with conn:
             conn.execute("DELETE FROM portfolio WHERE mode = 'live'")
             conn.execute("INSERT INTO settings (key, value) VALUES ('live_portfolio_removed', '1')")
+
+
+def _backfill_closed_at(conn):
+    """Trades closed before closed_at existed: their open time plus their hold time."""
+    rows = conn.execute("SELECT id, date, hold_time FROM trades WHERE status = 'Closed' AND closed_at IS NULL").fetchall()
+    for trade_id, date, hold_time in rows:
+        opened = pd.to_datetime(date, errors='coerce')
+        if pd.isna(opened):
+            continue
+        try:
+            hours = float(str(hold_time or '0').rstrip('h') or 0)
+        except ValueError:
+            hours = 0.0
+        closed = opened + pd.Timedelta(hours=hours)
+        conn.execute("UPDATE trades SET closed_at = ? WHERE id = ?", (closed.strftime(TIME_FORMAT), trade_id))
+
+
+def local_time(ms: Optional[int] = None) -> str:
+    """A journal timestamp: now, or epoch milliseconds, in local time."""
+    moment = datetime.now() if ms is None else datetime.fromtimestamp(ms / 1000)
+    return moment.strftime(TIME_FORMAT)
+
+
+def closed_dates(df):
+    """When each trade closed, falling back to its open date for rows without one."""
+    closed = pd.to_datetime(df['Closed_At'], errors='coerce') if 'Closed_At' in df.columns else None
+    opened = pd.to_datetime(df['Date'], errors='coerce')
+    return opened if closed is None else closed.fillna(opened)
 
 
 def _import_legacy_files(conn):
