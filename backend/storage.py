@@ -19,11 +19,14 @@ from typing import Dict, Optional
 
 import pandas as pd
 
+import backup
+
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(__file__)
 
 DB_FILE = os.getenv('TRADELAB_DB_FILE', os.path.join(BASE_DIR, 'tradelab.db'))
+BUSY_TIMEOUT_SECONDS = 30
 
 # Pre-SQLite data files, read only by the one-time import
 MODE_FILE = os.path.join(BASE_DIR, 'mode_config.json')
@@ -143,9 +146,13 @@ CREATE TABLE IF NOT EXISTS paper_sim (
 @contextmanager
 def _connect():
     """Open a connection and commit on success / roll back on error."""
-    conn = sqlite3.connect(DB_FILE, timeout=10)
+    # The background jobs and API requests write from different threads: a writer waits up to
+    # BUSY_TIMEOUT_SECONDS for another's transaction instead of failing with "database is locked"
+    conn = sqlite3.connect(DB_FILE, timeout=BUSY_TIMEOUT_SECONDS)
     try:
         conn.execute("PRAGMA foreign_keys = ON")
+        # Write-ahead logging: readers never block the writer, nor it them. Stored in the file.
+        conn.execute("PRAGMA journal_mode = WAL")
         _ensure_schema(conn)
         with conn:
             yield conn
@@ -153,10 +160,20 @@ def _connect():
         conn.close()
 
 
+def _before_migration():
+    """Back up the database before changing its schema or data in place. A failed backup is logged
+    but doesn't stop the app from starting."""
+    try:
+        backup.create_backup(DB_FILE, label="before-migration")
+    except Exception:
+        logger.exception("Could not back up the database before migrating it")
+
+
 def _ensure_schema(conn):
     conn.executescript(SCHEMA)
     columns = {row[1] for row in conn.execute("PRAGMA table_info(trades)")}
     if 'closed_at' not in columns:
+        _before_migration()
         with conn:
             conn.execute("ALTER TABLE trades ADD COLUMN closed_at TEXT")
             _backfill_closed_at(conn)

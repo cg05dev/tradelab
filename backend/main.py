@@ -23,9 +23,11 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
+import backup  # noqa: E402
 import fees  # noqa: E402
 import fill_sync  # noqa: E402
 import paper_sim  # noqa: E402
+import storage  # noqa: E402
 from hyperliquid_client import hl_client  # noqa: E402
 from routers import analytics, connection, hyperliquid, mode, portfolio, system, trades  # noqa: E402
 
@@ -47,6 +49,17 @@ async def _sync_fills_forever():
         await asyncio.sleep(FILL_SYNC_SECONDS)
 
 
+async def _back_up_forever():
+    """Back up the database when the last backup is TRADELAB_BACKUP_HOURS old, checking hourly, so
+    restarting the app often doesn't crowd older backups out."""
+    while True:
+        try:
+            await asyncio.to_thread(backup.back_up_if_due, storage.DB_FILE)
+        except Exception:
+            logger.exception("Database backup failed; retrying in an hour")
+        await asyncio.sleep(min(3600, backup.BACKUP_HOURS * 3600))
+
+
 async def _simulate_paper_forever():
     market = paper_sim.MainnetMarket()
     while True:
@@ -64,6 +77,8 @@ async def lifespan(app: FastAPI):
         tasks.append(asyncio.create_task(_sync_fills_forever()))
     if PAPER_SIM_SECONDS > 0:
         tasks.append(asyncio.create_task(_simulate_paper_forever()))
+    if backup.BACKUP_HOURS > 0:
+        tasks.append(asyncio.create_task(_back_up_forever()))
     yield
     for task in tasks:
         task.cancel()

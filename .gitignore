@@ -21,6 +21,7 @@ backend/*.db
 backend/*.db-journal
 backend/*.db-wal
 backend/*.db-shm
+backend/backups/
 backend/*.csv
 backend/*.json
 *.log
