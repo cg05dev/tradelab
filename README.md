@@ -177,6 +177,17 @@ tradelab/
   the UI keeps on screen.
 - **Journal what filled, not what was planned.** A live trade is written to the journal only after the
   entry fills, at the fill's average price and size, so a rejected order never leaves a phantom trade.
+  The order endpoint writes it in the same request that places the order, so a filled order is never
+  left out of the journal because the browser closed or lost its connection before the answer came back.
+- **An order whose answer is lost is looked up, not guessed at.** Every request to Hyperliquid times out
+  after 10 seconds, and each entry carries a random client order id. If the request fails without an
+  answer, the backend asks Hyperliquid for the order by that id: if it filled, it is protected and
+  journaled as usual; if Hyperliquid never saw it, the app says nothing was placed. Only if Hyperliquid
+  can't be reached at all is the outcome unknown, and the app then says not to place it again.
+- **Positions are checked against the journal.** In live mode, Open Trades compares Hyperliquid's
+  positions with the open journal trades every 30 seconds (after applying new fills) and flags any
+  difference: a position the journal is missing, which one click adds as an open trade at the
+  position's entry price, or a journal trade whose position is gone.
 - **The live journal follows the exchange.** Every 15 seconds the backend reads the account's fills and
   applies them to open live trades: partial take profits, and the real exit price, hold time and P&L
   after fees once a trade is fully closed. Fills of orders TradeLab placed are credited to their own
@@ -220,7 +231,7 @@ Every endpoint is local-only, and writes need the `X-TradeLab-Client` header. Mo
 | Trades | `GET /api/trades`, `GET /api/trades/open`, `GET /api/trades/closed` (filters: `asset`, `start`, `end`, `search`, `sort`, `page`, `limit`), `POST /api/trades`, `POST /api/trades/close`, `DELETE /api/trades/{id}` |
 | Analytics | `GET /api/analytics/metrics?timeframe=`, `GET /api/analytics/pnl-series?timeframe=` |
 | Connection | `GET`, `PUT`, `DELETE /api/connection`; `POST`, `DELETE /api/connection/api-wallet`; `POST /api/connection/api-wallet/prepare` and `/approve` (browser wallet approval) |
-| Hyperliquid | `GET /api/hyperliquid/price/{coin}`, `GET /api/hyperliquid/assets`, `GET /api/hyperliquid/fees`, `POST /api/hyperliquid/order`, `POST /api/hyperliquid/close/{coin}` (`{}` closes all, `{"size": 0.02}` that many coin units), `POST /api/hyperliquid/sync` (apply new fills now) |
+| Hyperliquid | `GET /api/hyperliquid/price/{coin}`, `GET /api/hyperliquid/assets`, `GET /api/hyperliquid/fees`, `POST /api/hyperliquid/order`, `POST /api/hyperliquid/close/{coin}` (`{}` closes all, `{"size": 0.02}` that many coin units), `POST /api/hyperliquid/sync` (apply new fills now), `GET /api/hyperliquid/reconcile` (positions vs. the journal), `POST /api/hyperliquid/reconcile/{coin}/adopt` (journal the untracked part of a position) |
 
 FastAPI serves interactive documentation of every endpoint at http://localhost:8000/docs.
 
