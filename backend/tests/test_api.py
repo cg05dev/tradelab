@@ -153,37 +153,21 @@ class TestClosedTradesAndAnalytics:
         assert [p["cumulative_pnl"] for p in series] == pytest.approx([200, 0, 400])
 
 
-class TestCalculations:
-    def test_position_size_uses_portfolio_and_risk(self, funded):
-        body = funded.post("/api/calculate/position-size?mode=paper", json={
-            "entry_price": 100, "stop_loss": 95, "leverage": 10, "direction": "long", "risk_percentage": 1,
-        }).json()
+class TestFeeRates:
+    def test_defaults_without_an_account(self, client):
+        body = client.get("/api/hyperliquid/fees").json()
 
-        # $100 risk / (5% stop + two 0.045% taker fees + 0.05% stop slippage)
-        assert body["position_size_dollars"] == pytest.approx(100 / 0.0514)
-        assert body["margin_required"] == pytest.approx(100 / 0.0514 / 10)
-        loss = body["price_loss"] + body["fees_at_stop"] + body["slippage_at_stop"]
-        assert loss == pytest.approx(100)  # the loss at the stop is exactly the risk
+        assert body == {"taker": 0.00045, "maker": 0.00015, "stop_slippage": 0.0005, "source": "default"}
 
-    def test_position_size_uses_the_accounts_fee_rates(self, funded, monkeypatch):
-        from routers import calculations
-        monkeypatch.setattr(calculations, "hl_client", Mock(enabled=True, get_fee_rates=Mock(return_value={"taker": 0.000432, "maker": 0.000144})))
+    def test_uses_the_accounts_rates(self, client, monkeypatch):
+        from routers import hyperliquid
+        account = Mock(enabled=True, get_fee_rates=Mock(return_value={"taker": 0.000432, "maker": 0.000144}))
+        monkeypatch.setattr(hyperliquid, "hl_client", account)
 
-        body = funded.post("/api/calculate/position-size?mode=paper", json={
-            "entry_price": 100, "stop_loss": 95, "leverage": 10, "direction": "long", "risk_percentage": 1,
-        }).json()
+        body = client.get("/api/hyperliquid/fees").json()
 
-        assert body["position_size_dollars"] == pytest.approx(100 / (0.05 + 2 * 0.000432 + 0.0005))
-        assert body["fee_rates"]["source"] == "account"
-
-    def test_position_size_without_a_stop_uses_the_liquidation_price(self, funded, no_fees):
-        body = funded.post("/api/calculate/position-size?mode=paper", json={
-            "entry_price": 100, "stop_loss": 0, "leverage": 10, "direction": "long", "risk_percentage": 1,
-        }).json()
-
-        # 10x long: liquidated 10% - 1.25% maintenance margin below entry, the planner's estimate
-        assert body["liquidation_price"] == pytest.approx(91.25)
-        assert body["position_size_dollars"] == pytest.approx(100 / 0.0875)
+        assert body["taker"] == pytest.approx(0.000432)
+        assert body["source"] == "account"
 
 
 class TestExecutionGuard:
@@ -204,44 +188,6 @@ class TestExecutionGuard:
 
         assert response.status_code == 403
         hl.market_close.assert_not_called()
-
-
-class TestWebhook:
-    PAYLOAD = {"asset": "BTC", "direction": "long", "entry": 100, "sl": 95, "tp1": 110, "tp1_alloc": 100,
-               "portfolio_size": 10_000, "risk_pct": 1, "mode": "paper"}
-
-    def test_disabled_without_configured_secret(self, client, monkeypatch):
-        monkeypatch.delenv("TRADELAB_WEBHOOK_SECRET", raising=False)
-
-        assert client.post("/api/webhook/trade", json=self.PAYLOAD).status_code == 503
-        assert client.get("/api/trades?mode=paper").json() == {"trades": []}
-
-    @pytest.mark.parametrize("secret", [None, "wrong"])
-    def test_rejects_missing_or_wrong_secret(self, client, monkeypatch, secret):
-        monkeypatch.setenv("TRADELAB_WEBHOOK_SECRET", "s3cret")
-
-        response = client.post("/api/webhook/trade", json={**self.PAYLOAD, "secret": secret})
-
-        assert response.status_code == 401
-        assert client.get("/api/trades?mode=paper").json() == {"trades": []}
-
-    def test_secret_in_body_creates_sized_trade(self, client, monkeypatch):
-        monkeypatch.setenv("TRADELAB_WEBHOOK_SECRET", "s3cret")
-
-        response = client.post("/api/webhook/trade", json={**self.PAYLOAD, "secret": "s3cret"})
-
-        assert response.status_code == 200
-        assert response.json()["position_size"] == pytest.approx(100 / 0.0514)  # 5% stop plus costs
-        trades = client.get("/api/trades/open?mode=paper").json()["trades"]
-        assert len(trades) == 1
-        assert "s3cret" not in str(trades)
-
-    def test_secret_in_header(self, client, monkeypatch):
-        monkeypatch.setenv("TRADELAB_WEBHOOK_SECRET", "s3cret")
-
-        response = client.post("/api/webhook/trade", json=self.PAYLOAD, headers={"X-Webhook-Secret": "s3cret"})
-
-        assert response.status_code == 200
 
 
 class TestCors:

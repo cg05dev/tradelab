@@ -2,8 +2,8 @@
 Trading costs TradeLab plans with, so "risk 2%" means 2% of the account after costs.
 
 A stopped-out trade pays the taker fee twice (the entry is an IOC order, the stop is a market
-order) and fills somewhat past the stop. Sizing divides the risk by the stop distance plus those
-costs, instead of the stop distance alone.
+order) and fills somewhat past the stop. The planner (frontend/src/pages/PlanTrade.tsx) divides the
+risk by the stop distance plus those costs, and the paper simulator charges the same rates.
 
 Rates are the connected account's (Hyperliquid's userFees, which reflects volume tier, less the
 referral discount), else Hyperliquid's base tier.
@@ -35,7 +35,3 @@ def current_rates(client) -> Dict:
             logger.warning(f"Could not fetch Hyperliquid fee rates, using the defaults: {e}")
     return default_rates()
 
-
-def cost_at_stop(rates: Dict) -> float:
-    """What a stopped-out trade costs beyond the stop distance, as a fraction of its notional."""
-    return 2 * rates["taker"] + rates["stop_slippage"]

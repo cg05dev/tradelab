@@ -21,7 +21,6 @@ places the orders, and keeps the journal in step with what actually fills on the
   a searchable, sortable trade history.
 - **Paper and live kept apart**: separate journals and balances; the live balance is always the
   connected account's value. Testnet accounts are badged so a test order is never mistaken for a real one.
-- **TradingView webhook**: alerts can create sized trades automatically (secret-protected).
 
 ## Tech Stack
 
@@ -85,7 +84,6 @@ Everything is optional. Put settings in `backend/.env`:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `TRADELAB_WEBHOOK_SECRET` | *(unset: webhook off)* | Shared secret for `POST /api/webhook/trade` |
 | `TRADELAB_CORS_ORIGINS` | the Vite dev server | Comma-separated origins allowed to call the API |
 | `TRADELAB_FILL_SYNC_SECONDS` | `15` | How often live trades are checked against Hyperliquid fills (`0` turns it off) |
 | `TRADELAB_PAPER_SIM_SECONDS` | `5` | How often open paper trades are checked against mainnet prices (`0` turns it off) |
@@ -102,17 +100,6 @@ HYPERLIQUID_WALLET_ADDRESS=0x...   # your account
 HYPERLIQUID_PRIVATE_KEY=0x...      # the API wallet's key
 HYPERLIQUID_USE_TESTNET=true
 ```
-
-### TradingView webhook
-
-TradingView alerts can't send custom headers, so put the secret in the alert's JSON body:
-
-```json
-{"secret": "some-long-random-string", "asset": "BTC", "direction": "long", "entry": 64000, "sl": 62500, "tp1": 68000, "tp1_alloc": 100, "mode": "paper"}
-```
-
-Other callers can send it as an `X-Webhook-Secret` header instead. The API only answers requests
-addressed to localhost, so to reach it from TradingView, expose just this path through a tunnel.
 
 ## Development
 
@@ -139,8 +126,8 @@ keychain with the Hyperliquid client mocked out, so they never touch real money 
 tradelab/
 ├── backend/
 │   ├── main.py                # App setup: local-only guard, CORS, routers, background jobs
-│   ├── routers/               # One APIRouter per area: trades, analytics, calculations, portfolio,
-│   │                          #   mode, hyperliquid, connection, webhook, system
+│   ├── routers/               # One APIRouter per area: trades, analytics, portfolio, mode,
+│   │                          #   hyperliquid, connection, system
 │   ├── storage.py             # SQLite persistence (and the one-time import of old CSV journals)
 │   ├── connection.py          # Connected account (SQLite) and API wallet key (OS keychain)
 │   ├── hyperliquid_client.py  # Hyperliquid API client: prices, account value, orders, fills, fees
@@ -197,27 +184,23 @@ tradelab/
   is refused rather than guessed.
 - **Allocations are fractions.** In the API and the database a take profit or stop loss allocation is
   a fraction of the position (`0.5` = half). Anything outside 0–1 is rejected, so a percentage sent by
-  mistake fails loudly instead of sizing an order 50× too large. (The webhook's `tpN_alloc` fields are
-  percentages and are converted.)
+  mistake fails loudly instead of sizing an order 50× too large.
 - **Trade through an API wallet, never the main key.** Enabling trading creates an API wallet in the
   backend and has the browser wallet sign its approval (EIP-712), so the main key never leaves the
   wallet; the backend checks who signed before submitting it. A pasted key must be an approved API
   wallet of the connected account, and a main wallet key is refused. Keys live only in the OS keychain.
 - **Only this computer can call the API.** The backend refuses requests not addressed to localhost or
-  carrying proxy headers, which blocks DNS rebinding and keeps a tunnel from exposing anything but the
-  webhook. Requests that change anything must carry an `X-TradeLab-Client` header, which other websites
+  carrying proxy headers, which blocks DNS rebinding and keeps a tunnel or proxy from exposing it.
+  Requests that change anything must carry an `X-TradeLab-Client` header, which other websites
   can't add without passing CORS.
 - **SQLite, not a database server.** It's a single-user local app, so an embedded database fits: one
   file, nothing to run, part of Python's standard library. Each write is a transaction, and closing a
   trade updates the trade and the paper balance together. Trade ids are scoped to their mode, so an id
   from the paper journal can never touch a live trade.
-- **Webhook auth that works with TradingView.** The shared secret travels in the JSON body and is
-  compared in constant time. The endpoint is off until a secret is configured.
 
 ## API
 
-All endpoints except `/health` and the webhook are local-only, and writes need the `X-TradeLab-Client`
-header. Most take an optional `?mode=paper|live` (default: the current mode).
+Every endpoint is local-only, and writes need the `X-TradeLab-Client` header. Most take an optional `?mode=paper|live` (default: the current mode).
 
 | Area | Endpoints |
 |---|---|
@@ -226,10 +209,8 @@ header. Most take an optional `?mode=paper|live` (default: the current mode).
 | Portfolio | `GET /api/portfolio` returns the balance and its `source`: `manual` (paper), `hyperliquid` (live) or `none` (live, no account). `PUT /api/portfolio` sets and `POST /api/portfolio/reset` clears the paper balance. |
 | Trades | `GET /api/trades`, `GET /api/trades/open`, `GET /api/trades/closed` (filters: `asset`, `start`, `end`, `search`, `sort`, `page`, `limit`), `POST /api/trades`, `POST /api/trades/close`, `DELETE /api/trades/{id}` |
 | Analytics | `GET /api/analytics/metrics?timeframe=`, `GET /api/analytics/pnl-series?timeframe=` |
-| Sizing | `POST /api/calculate/position-size` |
 | Connection | `GET`, `PUT`, `DELETE /api/connection`; `POST`, `DELETE /api/connection/api-wallet`; `POST /api/connection/api-wallet/prepare` and `/approve` (browser wallet approval) |
 | Hyperliquid | `GET /api/hyperliquid/price/{coin}`, `GET /api/hyperliquid/assets`, `GET /api/hyperliquid/fees`, `POST /api/hyperliquid/order`, `POST /api/hyperliquid/close/{coin}` (`{}` closes all, `{"size": 0.02}` that many coin units), `POST /api/hyperliquid/sync` (apply new fills now) |
-| Webhook | `POST /api/webhook/trade` |
 
 FastAPI serves interactive documentation of every endpoint at http://localhost:8000/docs.
 
