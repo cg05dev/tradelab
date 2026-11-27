@@ -37,13 +37,6 @@ class TradeData(BaseModel):
     leverage: Optional[int] = None
     exchange_orders: Optional[ExchangeOrders] = None  # live trades placed through TradeLab
 
-class PositionSizeRequest(BaseModel):
-    entry_price: float
-    stop_loss: float
-    leverage: float
-    direction: str
-    risk_percentage: Optional[float] = None
-
 class CloseTradeRequest(BaseModel):
     trade_index: int
     exit_price: float

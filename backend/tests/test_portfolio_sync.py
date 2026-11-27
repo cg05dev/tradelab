@@ -35,14 +35,6 @@ def test_without_an_account_live_has_no_portfolio(api):
     assert "Settings" in body["sync_error"]
 
 
-def test_without_an_account_live_sizing_is_refused(api):
-    response = api.post("/api/calculate/position-size?mode=live", json={
-        "entry_price": 100, "stop_loss": 95, "leverage": 10, "direction": "long", "risk_percentage": 1,
-    })
-
-    assert response.status_code == 409
-
-
 def test_the_live_portfolio_can_never_be_typed_in(api):
     assert api.put("/api/portfolio?mode=live", json={"portfolio_size": 500}).status_code == 400
     assert api.post("/api/portfolio/reset?mode=live").status_code == 400
@@ -81,19 +73,7 @@ def test_outage_before_any_sync_refuses_to_guess(api, account):
     account.get_account_summary.side_effect = RuntimeError("timeout")
 
     body = api.get("/api/portfolio?mode=live").json()
-    sizing = api.post("/api/calculate/position-size?mode=live", json={
-        "entry_price": 100, "stop_loss": 95, "leverage": 10, "direction": "long", "risk_percentage": 1,
-    })
 
     assert body["portfolio_size"] is None
     assert body["source"] == "hyperliquid"
     assert "sync_error" in body
-    assert sizing.status_code == 503
-
-
-def test_position_sizing_uses_the_account_value(api, account):
-    body = api.post("/api/calculate/position-size?mode=live", json={
-        "entry_price": 100, "stop_loss": 95, "leverage": 10, "direction": "long", "risk_percentage": 1,
-    }).json()
-
-    assert body["risk_amount"] == pytest.approx(123.4567)

@@ -27,6 +27,7 @@ def test_other_hosts_are_refused(data_dir):
     remote = TestClient(main.app, base_url="http://evil.example", headers={"X-TradeLab-Client": "x"})
 
     assert remote.get("/api/mode").status_code == 403
+    assert remote.get("/health").status_code == 403
     assert remote.post("/api/hyperliquid/close/BTC", json={}).status_code == 403
 
 
@@ -44,11 +45,3 @@ def test_changes_require_the_client_header(data_dir):
     assert bare.post("/api/mode", json={"mode": "paper"}).status_code == 403
     assert bare.put("/api/connection", json={"account_address": "0x" + "1" * 40}).status_code == 403
     assert bare.get("/api/mode").json()["mode"] == "live"
-
-
-def test_webhook_is_reachable_through_a_tunnel(data_dir, monkeypatch):
-    """TradingView reaches the webhook from outside; it has its own secret (503 here: none configured)."""
-    monkeypatch.delenv("TRADELAB_WEBHOOK_SECRET", raising=False)
-    remote = TestClient(main.app, base_url="https://abc.tunnel.example", headers={"X-Forwarded-For": "52.89.214.238"})
-
-    assert remote.post("/api/webhook/trade", json={}).status_code == 503
