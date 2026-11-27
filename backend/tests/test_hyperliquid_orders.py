@@ -1,5 +1,7 @@
 """Live order and close endpoints, against a mocked exchange (see conftest `hl`)."""
 
+from unittest.mock import Mock
+
 import pytest
 
 from routers import hyperliquid
@@ -229,3 +231,149 @@ class TestClosePosition:
 
         assert response.status_code == 400
         assert "could not match" in response.json()["detail"]
+
+
+def _open_live_trades(client):
+    return client.get("/api/trades/open?mode=live").json()["trades"]
+
+
+class TestJournaling:
+    """The order endpoint journals the trade itself, so a fill never depends on a second request."""
+
+    def test_a_filled_order_is_journaled_at_its_fill(self, live, hl):
+        hl.exchange_client.order.side_effect = [_filled(0.02, 100_050, oid=42), RESTING, RESTING]
+
+        body = live.post("/api/hyperliquid/order", json=_order(thesis="breakout")).json()
+
+        [trade] = _open_live_trades(live)
+        assert body["journaled"] is True
+        assert body["trade_index"] == trade["_index"]
+        assert trade["Asset"] == "BTC-USDC"
+        assert trade["Direction"] == "long"
+        assert trade["Entry"] == pytest.approx(100_050)
+        assert trade["Position_Size"] == pytest.approx(0.02 * 100_050)
+        assert trade["Margin"] == pytest.approx(0.02 * 100_050 / 10)
+        assert trade["SL"] == 95_000
+        assert trade["Thesis"] == "breakout"
+
+    def test_its_orders_are_claimed_for_it(self, live, hl):
+        import sqlite3
+
+        import storage
+        hl.exchange_client.order.side_effect = [_filled(0.02, 100_000, oid=42), _status({"resting": {"oid": 8}}), RESTING]
+        hl.place_stop_order.return_value = _status({"resting": {"oid": 9}})
+
+        trade_id = live.post("/api/hyperliquid/order", json=_order()).json()["trade_index"]
+
+        with sqlite3.connect(storage.DB_FILE) as conn:
+            rows = conn.execute("SELECT oid, trade_id, role, level FROM exchange_orders ORDER BY oid").fetchall()
+        assert rows == [(7, trade_id, "take_profit", 1), (8, trade_id, "take_profit", 0),
+                        (9, trade_id, "stop_loss", 0), (42, trade_id, "entry", None)]
+
+    @pytest.mark.parametrize("levels", [
+        {"stop_losses": [{"price": 100_500, "allocation": 1.0}]},  # a long's stop above the price
+        {"take_profits": [{"price": 99_000, "allocation": 1.0}]},  # a long's target below it
+    ])
+    def test_levels_on_the_wrong_side_of_the_price_are_refused_before_trading(self, live, hl, levels):
+        response = live.post("/api/hyperliquid/order", json=_order(**levels))
+
+        assert response.status_code == 400
+        hl.exchange_client.order.assert_not_called()
+
+    def test_a_journal_failure_still_reports_the_fill(self, live, hl, monkeypatch):
+        hl.exchange_client.order.side_effect = [_filled(0.02, 100_000), RESTING, RESTING]
+        monkeypatch.setattr(hyperliquid, "record_trade", Mock(side_effect=OSError("disk full")))
+
+        response = live.post("/api/hyperliquid/order", json=_order())
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["journaled"] is False
+        assert body["status"] == "partial"
+        assert "disk full" in body["warnings"][0]
+        assert body["filled_size"] == pytest.approx(0.02)
+
+    def test_the_entry_carries_a_client_order_id(self, live, hl):
+        hl.exchange_client.order.side_effect = [_filled(0.02, 100_000), RESTING, RESTING]
+
+        live.post("/api/hyperliquid/order", json=_order())
+
+        cloid = hl.exchange_client.order.call_args_list[0].kwargs["cloid"]
+        assert str(cloid).startswith("0x") and len(str(cloid)) == 34
+
+
+def _order_status(orig, remaining, oid=42):
+    return {"status": "order", "order": {"order": {"oid": oid, "origSz": str(orig), "sz": str(remaining)}, "status": "filled"}}
+
+
+def _user_fill(oid, size, price):
+    return {"oid": oid, "sz": str(size), "px": str(price), "tid": 1, "time": 0, "coin": "BTC", "dir": "Open Long"}
+
+
+class TestEntryRequestFails:
+    """A request that fails without an answer may still have placed the order: ask Hyperliquid."""
+
+    @pytest.fixture(autouse=True)
+    def no_waiting(self, monkeypatch):
+        monkeypatch.setattr(hyperliquid, "ENTRY_LOOKUP_DELAY_SECONDS", 0)
+
+    def test_an_order_that_filled_anyway_is_protected_and_journaled(self, live, hl):
+        hl.exchange_client.order.side_effect = [TimeoutError("read timed out"), RESTING, RESTING]
+        hl.order_status.return_value = _order_status(0.02, 0)
+        hl.get_user_fills.return_value = [_user_fill(42, 0.012, 100_000), _user_fill(42, 0.008, 100_100), _user_fill(9, 1, 1)]
+
+        response = live.post("/api/hyperliquid/order", json=_order())
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["filled_size"] == pytest.approx(0.02)
+        assert body["avg_price"] == pytest.approx(100_040)
+        assert body["journaled"] is True
+        assert hl.place_stop_order.call_args.kwargs["size"] == pytest.approx(0.02)
+        cloid = hl.exchange_client.order.call_args_list[0].kwargs["cloid"]
+        hl.order_status.assert_called_with(str(cloid))
+        [trade] = _open_live_trades(live)
+        assert trade["Entry"] == pytest.approx(100_040)
+
+    def test_without_its_fills_yet_it_is_journaled_at_the_market_price(self, live, hl):
+        hl.exchange_client.order.side_effect = [TimeoutError("read timed out"), RESTING, RESTING]
+        hl.order_status.return_value = _order_status(0.02, 0)
+        hl.get_user_fills.return_value = []
+
+        body = live.post("/api/hyperliquid/order", json=_order()).json()
+
+        assert body["avg_price"] == pytest.approx(100_000)
+        assert body["status"] == "partial"
+        assert "market price" in body["warnings"][0]
+
+    def test_an_order_hyperliquid_never_saw_was_not_placed(self, live, hl):
+        hl.exchange_client.order.side_effect = TimeoutError("read timed out")
+        hl.order_status.return_value = {"status": "unknownOid"}
+
+        response = live.post("/api/hyperliquid/order", json=_order())
+
+        assert response.status_code == 502
+        assert "nothing was placed" in response.json()["detail"]
+        assert hl.order_status.call_count == hyperliquid.ENTRY_LOOKUP_ATTEMPTS
+        hl.place_stop_order.assert_not_called()
+        assert _open_live_trades(live) == []
+
+    def test_an_unknown_outcome_says_not_to_retry(self, live, hl):
+        hl.exchange_client.order.side_effect = TimeoutError("read timed out")
+        hl.order_status.side_effect = ConnectionError("offline")
+
+        response = live.post("/api/hyperliquid/order", json=_order())
+
+        assert response.status_code == 502
+        assert "Don't place it again" in response.json()["detail"]
+        assert _open_live_trades(live) == []
+
+    def test_an_order_that_was_placed_but_not_filled_is_an_error(self, live, hl):
+        hl.exchange_client.order.side_effect = TimeoutError("read timed out")
+        hl.order_status.return_value = _order_status(0.02, 0.02)
+
+        response = live.post("/api/hyperliquid/order", json=_order())
+
+        assert response.status_code == 400
+        hl.place_stop_order.assert_not_called()
+        assert _open_live_trades(live) == []

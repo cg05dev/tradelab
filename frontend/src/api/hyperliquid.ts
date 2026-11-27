@@ -30,5 +30,18 @@ export const getFeeRates = () => api.get<FeeRates>('/api/hyperliquid/fees')
 // Apply new Hyperliquid fills (TP/SL hits) to the open live journal trades now
 export const syncHyperliquidFills = () =>
   api.post<{ synced: boolean; updated: number[]; closed: number[] }>('/api/hyperliquid/sync')
-
-
+// Hyperliquid's positions compared with the open live journal trades, coin by coin
+export type ReconcileIssue = {
+  coin: string
+  kind: 'untracked' | 'missing' | 'mismatch'
+  exchange_size: number
+  journal_size: number
+  trade_ids: number[]
+  // Coin units (negative = short) that adding to the journal would fix; 0 if adding can't fix it
+  untracked_size: number
+  message: string
+}
+export const reconcilePositions = () => api.get<{ in_sync: boolean; issues: ReconcileIssue[] }>('/api/hyperliquid/reconcile')
+// Add the part of a position the journal doesn't account for as a new open live trade
+export const adoptPosition = (coin: string) =>
+  api.post<{ trade_index: number; coin: string; size: number; entry_price: number }>(`/api/hyperliquid/reconcile/${encodeURIComponent(coin)}/adopt`)

@@ -1,7 +1,7 @@
 import json
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Iterable, Optional
 
 import pandas as pd
 from fastapi import APIRouter, HTTPException
@@ -142,67 +142,72 @@ def get_closed_trades(asset=None, start=None, end=None, sort=None, page=None, li
         return {"trades": [], "count": 0}
 
 
+def validate_levels(direction: str, entry_price: float, stop_prices: Iterable[float], tp_prices: Iterable[float]) -> None:
+    """Raise a 400 unless every stop loss and take profit (0 = none) is on the right side of `entry_price`."""
+    if entry_price <= 0:
+        raise HTTPException(status_code=400, detail="Entry price must be greater than 0")
+    direction = direction.lower()
+    if direction not in ('long', 'short'):
+        raise HTTPException(status_code=400, detail="Direction must be 'long' or 'short'")
+    long = direction == 'long'
+    for price in stop_prices:
+        if price > 0 and (price >= entry_price if long else price <= entry_price):
+            side = "below" if long else "above"
+            raise HTTPException(status_code=400, detail=f"Stop loss must be {side} entry price for {direction} positions")
+    for price in tp_prices:
+        if price > 0 and (price <= entry_price if long else price >= entry_price):
+            side = "above" if long else "below"
+            raise HTTPException(status_code=400, detail=f"Take profit {price} must be {side} entry price for {direction} positions")
+
+
+def record_trade(trade_data: TradeData, mode: str) -> int:
+    """Write a new open trade to `mode`'s journal, without validating it, and return its id. A paper
+    trade pays its entry fee; a live trade claims its Hyperliquid orders, so their fills are credited
+    to it."""
+    new_trade = {
+        'Date': local_time(),
+        'Asset': trade_data.asset.strip(),
+        'Direction': trade_data.direction.lower(),
+        'Entry': float(trade_data.entry_price),
+        'SL': float(trade_data.stop_loss) if trade_data.stop_loss > 0 else 0.0,
+        'TPs': json.dumps([tp.model_dump() for tp in trade_data.take_profits]),
+        'SLs': json.dumps([sl.model_dump() for sl in trade_data.stop_losses]),
+        'Position_Size': float(trade_data.position_size),
+        'Thesis': str(trade_data.thesis) if trade_data.thesis else '',
+        'Status': 'Open',
+        'Exit_Price': None,
+        'P&L': 0.0,
+        'Hold_Time': None,
+        'TP_Hit': False,
+        'TP_Price': None,
+        'SL_Hit': False,
+        'SL_Price': None,
+        'Hit_TPs': json.dumps([]),
+        'Margin': float(trade_data.margin) if trade_data.margin is not None else float(trade_data.position_size) / int(trade_data.leverage) if trade_data.leverage else 0.0,
+        'Leverage': int(trade_data.leverage) if trade_data.leverage else 1
+    }
+
+    trade_id = insert_trade(new_trade, mode)
+    if mode == "paper":
+        # Paper trades pay fees like live ones: the entry is a market (taker) order
+        paper_sim.charge_entry(trade_id, new_trade['Position_Size'], fees.current_rates(hl_client))
+    orders = trade_data.exchange_orders
+    if orders and mode == "live":
+        fill_sync.claim_orders(trade_id, [(orders.entry, "entry", None)]
+                               + [(oid, "take_profit", i) for i, oid in enumerate(orders.take_profits)]
+                               + [(oid, "stop_loss", i) for i, oid in enumerate(orders.stop_losses)])
+    return trade_id
+
+
 @router.post("")
 def add_trade(trade_data: TradeData, mode: Optional[str] = None):
-    """Add a new trade"""
+    """Add a new trade. Live trades placed through TradeLab are journaled by the order endpoint itself."""
     try:
         current_mode = mode or load_mode()
-        # Validation
-        if trade_data.entry_price <= 0:
-            raise HTTPException(status_code=400, detail="Entry price must be greater than 0")
-
-        if trade_data.direction.lower() not in ['long', 'short']:
-            raise HTTPException(status_code=400, detail="Direction must be 'long' or 'short'")
-
-        # Validate stop loss
-        if trade_data.stop_loss > 0:
-            if trade_data.direction.lower() == 'long' and trade_data.stop_loss >= trade_data.entry_price:
-                raise HTTPException(status_code=400, detail="Stop loss must be below entry price for long positions")
-            if trade_data.direction.lower() == 'short' and trade_data.stop_loss <= trade_data.entry_price:
-                raise HTTPException(status_code=400, detail="Stop loss must be above entry price for short positions")
-
-        # Validate take profits
-        for tp in trade_data.take_profits:
-            if tp.price > 0:
-                if trade_data.direction.lower() == 'long' and tp.price <= trade_data.entry_price:
-                    raise HTTPException(status_code=400, detail=f"Take profit {tp.price} must be above entry price for long positions")
-                if trade_data.direction.lower() == 'short' and tp.price >= trade_data.entry_price:
-                    raise HTTPException(status_code=400, detail=f"Take profit {tp.price} must be below entry price for short positions")
-
-        new_trade = {
-            'Date': local_time(),
-            'Asset': trade_data.asset.strip(),
-            'Direction': trade_data.direction.lower(),
-            'Entry': float(trade_data.entry_price),
-            'SL': float(trade_data.stop_loss) if trade_data.stop_loss > 0 else 0.0,
-            'TPs': json.dumps([tp.model_dump() for tp in trade_data.take_profits]),
-            'SLs': json.dumps([sl.model_dump() for sl in trade_data.stop_losses]),
-            'Position_Size': float(trade_data.position_size),
-            'Thesis': str(trade_data.thesis) if trade_data.thesis else '',
-            'Status': 'Open',
-            'Exit_Price': None,
-            'P&L': 0.0,
-            'Hold_Time': None,
-            'TP_Hit': False,
-            'TP_Price': None,
-            'SL_Hit': False,
-            'SL_Price': None,
-            'Hit_TPs': json.dumps([]),
-            'Margin': float(trade_data.margin) if trade_data.margin is not None else float(trade_data.position_size) / int(trade_data.leverage) if trade_data.leverage else 0.0,
-            'Leverage': int(trade_data.leverage) if trade_data.leverage else 1
-        }
-
-        trade_id = insert_trade(new_trade, current_mode)
-        if current_mode == "paper":
-            # Paper trades pay fees like live ones: the entry is a market (taker) order
-            paper_sim.charge_entry(trade_id, new_trade['Position_Size'], fees.current_rates(hl_client))
-        orders = trade_data.exchange_orders
-        if orders and current_mode == "live":
-            # So the fills of these orders are credited to this trade when they happen
-            fill_sync.claim_orders(trade_id, [(orders.entry, "entry", None)]
-                                   + [(oid, "take_profit", i) for i, oid in enumerate(orders.take_profits)]
-                                   + [(oid, "stop_loss", i) for i, oid in enumerate(orders.stop_losses)])
-
+        validate_levels(trade_data.direction, trade_data.entry_price,
+                        [trade_data.stop_loss] + [sl.price for sl in trade_data.stop_losses],
+                        [tp.price for tp in trade_data.take_profits])
+        trade_id = record_trade(trade_data, current_mode)
         return {"message": "Trade added successfully", "trade_index": trade_id}
     except HTTPException:
         raise

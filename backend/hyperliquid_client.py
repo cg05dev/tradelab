@@ -36,6 +36,10 @@ except ImportError:
 PERP_MAX_DECIMALS = 6
 PRICE_SIG_FIGS = 5
 
+# Every request to Hyperliquid gives up after this long. The SDK's own default is to wait forever,
+# which would leave an order request hanging with no way to tell whether it was placed.
+REQUEST_TIMEOUT_SECONDS = 10
+
 
 def round_price(price: float, sz_decimals: int) -> float:
     """
@@ -63,7 +67,7 @@ def fetch_user_role(address: str, network: str) -> Dict:
     "missing", ...}. An agent (API wallet) carries data.user, its account; a sub-account carries
     data.master. "missing" means Hyperliquid has never seen the address. Raises if the lookup fails.
     """
-    response = requests.post(f"{API_URLS[network]}/info", json={"type": "userRole", "user": address.lower()}, timeout=10)
+    response = requests.post(f"{API_URLS[network]}/info", json={"type": "userRole", "user": address.lower()}, timeout=REQUEST_TIMEOUT_SECONDS)
     response.raise_for_status()
     role = response.json()
     if not isinstance(role, dict) or "role" not in role:
@@ -130,7 +134,7 @@ class HyperliquidClient:
             conn = self.connection
             try:
                 logger.info(f"Connecting to Hyperliquid {conn.network}...")
-                self._info_client = Info(self.base_url, skip_ws=True)
+                self._info_client = Info(self.base_url, skip_ws=True, timeout=REQUEST_TIMEOUT_SECONDS)
             except Exception as e:
                 logger.error(f"Error connecting to Hyperliquid: {e}")
                 return
@@ -147,9 +151,10 @@ class HyperliquidClient:
                     self._exchange_client = Exchange(
                         wallet, self.base_url,
                         account_address=role["data"]["master"], vault_address=conn.account_address,
+                        timeout=REQUEST_TIMEOUT_SECONDS,
                     )
                 else:
-                    self._exchange_client = Exchange(wallet, self.base_url, account_address=conn.account_address)
+                    self._exchange_client = Exchange(wallet, self.base_url, account_address=conn.account_address, timeout=REQUEST_TIMEOUT_SECONDS)
                 logger.info(f"Trading enabled for {conn.account_address} with API wallet {wallet.address}")
             except Exception as e:
                 logger.error(f"Could not set up trading: {e}")
@@ -192,7 +197,7 @@ class HyperliquidClient:
         return role
 
     def _info(self, request: Dict):
-        response = requests.post(f"{self.base_url}/info", json=request, timeout=10)
+        response = requests.post(f"{self.base_url}/info", json=request, timeout=REQUEST_TIMEOUT_SECONDS)
         response.raise_for_status()
         return response.json()
 
@@ -299,7 +304,7 @@ class HyperliquidClient:
     def submit_signed_action(self, action: Dict, signature: Dict, nonce: int) -> Dict:
         """Send an action signed elsewhere (e.g. by the user's browser wallet) to /exchange."""
         payload = {"action": action, "nonce": nonce, "signature": signature, "vaultAddress": None, "expiresAfter": None}
-        response = requests.post(f"{self.base_url}/exchange", json=payload, timeout=10)
+        response = requests.post(f"{self.base_url}/exchange", json=payload, timeout=REQUEST_TIMEOUT_SECONDS)
         response.raise_for_status()
         return response.json()
 
@@ -309,7 +314,7 @@ class HyperliquidClient:
             response = requests.post(
                 f"{self.base_url}/info",
                 json={"type": "allMids"},
-                timeout=10,
+                timeout=REQUEST_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
             all_mids = response.json()
@@ -364,62 +369,58 @@ class HyperliquidClient:
             logger.error(f"Error getting asset metadata: {e}")
             return None
 
-    def get_positions(self, coin: Optional[str] = None) -> List[Dict]:
-        """Get open positions"""
+    def fetch_positions(self, coin: Optional[str] = None) -> List[Dict]:
+        """The connected account's open positions (all of them, or just `coin`'s). Raises if they can't
+        be fetched, so "no positions" always means the account has none."""
         self._ensure_initialized()
-
         if not self._info_client:
-            logger.error("get_positions: Info client not initialized")
-            return []
-
+            raise ValueError("Hyperliquid market data unavailable")
         address = self.connection.account_address
         if not address:
-            logger.error("get_positions: no account connected")
-            return []
+            raise ValueError("No Hyperliquid account connected")
 
+        user_state = self._info_client.user_state(address)
+        if not isinstance(user_state, dict) or "assetPositions" not in user_state:
+            raise ValueError(f"Unexpected clearinghouseState response: {user_state}")
+
+        positions = []
+        for pos_data in user_state["assetPositions"]:
+            position = pos_data.get("position", {})
+            if coin and position.get("coin") != coin:
+                continue
+            leverage = position.get("leverage") or {}
+            positions.append({
+                "coin": position.get("coin"),
+                "size": float(position.get("szi", 0)),
+                "entry_price": float(position.get("entryPx", 0)),
+                "position_value": float(position.get("positionValue", 0)),
+                "unrealized_pnl": float(position.get("unrealizedPnl", 0)),
+                "liquidation_price": float(position["liquidationPx"]) if position.get("liquidationPx") else None,
+                "margin_used": float(position.get("marginUsed", 0)),
+                "max_leverage": float(position.get("maxLeverage", 0)),
+                "leverage": int(leverage.get("value") or 0) or None,
+            })
+        return positions
+
+    def get_positions(self, coin: Optional[str] = None) -> List[Dict]:
+        """fetch_positions, or [] (logged) if they can't be fetched."""
         try:
-            logger.debug(f"Fetching user_state for wallet: {address}")
-            user_state = self._info_client.user_state(address)
-            logger.debug(f"user_state response: {user_state}")
-
-            if not user_state:
-                logger.error("user_state is None")
-                return []
-
-            if 'assetPositions' not in user_state:
-                logger.error(f"'assetPositions' not in user_state. Keys: {user_state.keys()}")
-                return []
-
-            asset_positions = user_state.get('assetPositions', [])
-            logger.debug(f"assetPositions count: {len(asset_positions)}")
-            logger.debug(f"assetPositions: {asset_positions}")
-
-            positions = []
-            for pos_data in asset_positions:
-                position = pos_data.get('position', {})
-                logger.debug(f"Processing position: {position}")
-
-                if coin and position.get('coin') != coin:
-                    logger.debug(f"Skipping position, coin mismatch: {position.get('coin')} != {coin}")
-                    continue
-
-                positions.append({
-                    'coin': position.get('coin'),
-                    'size': float(position.get('szi', 0)),
-                    'entry_price': float(position.get('entryPx', 0)),
-                    'position_value': float(position.get('positionValue', 0)),
-                    'unrealized_pnl': float(position.get('unrealizedPnl', 0)),
-                    'liquidation_price': float(position.get('liquidationPx', 0)) if position.get('liquidationPx') else None,
-                    'margin_used': float(position.get('marginUsed', 0)),
-                    'max_leverage': float(position.get('maxLeverage', 0))
-                })
-
-            logger.debug(f"Returning {len(positions)} positions")
-            return positions
-
+            return self.fetch_positions(coin)
         except Exception as e:
             logger.exception(f"Error getting positions: {e}")
             return []
+
+    def order_status(self, cloid: str) -> Dict:
+        """Hyperliquid's orderStatus for an order of the connected account, looked up by the client order
+        id (cloid) it was placed with: {"status": "order", "order": {"order": {...}, "status": ...}}, or
+        {"status": "unknownOid"} if Hyperliquid has no such order. Raises if the lookup fails."""
+        address = self.connection.account_address
+        if not address:
+            raise ValueError("No Hyperliquid account connected")
+        result = self._info({"type": "orderStatus", "user": address, "oid": cloid})
+        if not isinstance(result, dict) or "status" not in result:
+            raise ValueError(f"Unexpected orderStatus response: {result}")
+        return result
 
     def place_stop_order(self, coin: str, is_buy: bool, size: float, trigger_price: float, is_long_position: bool) -> Dict:
         """Place a reduce-only stop-market order. `trigger_price` must already be a valid price (see round_price)."""

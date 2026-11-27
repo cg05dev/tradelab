@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 import pytest
 from hyperliquid.utils.signing import float_to_wire
 
-from hyperliquid_client import HyperliquidClient, round_price
+from hyperliquid_client import REQUEST_TIMEOUT_SECONDS, HyperliquidClient, round_price
 
 
 def _response(payload):
@@ -204,7 +204,8 @@ class TestConnectedClient:
             assert client.can_trade is True
         wallet, base_url = exchange.call_args.args
         assert wallet.key.hex().removeprefix("0x") == AGENT_KEY.removeprefix("0x")
-        assert exchange.call_args.kwargs == {"account_address": ACCOUNT}
+        # With a timeout: the SDK's default is to wait forever for an order's answer
+        assert exchange.call_args.kwargs == {"account_address": ACCOUNT, "timeout": REQUEST_TIMEOUT_SECONDS}
 
     def test_sub_account_trades_through_its_master(self, keychain):
         master = "0x" + "99" * 20
@@ -212,7 +213,7 @@ class TestConnectedClient:
         with patch("hyperliquid_client.Info"), patch("hyperliquid_client.Exchange") as exchange, \
                 patch("hyperliquid_client.fetch_user_role", return_value={"role": "subAccount", "data": {"master": master}}):
             assert client.can_trade is True
-        assert exchange.call_args.kwargs == {"account_address": master, "vault_address": ACCOUNT}
+        assert exchange.call_args.kwargs == {"account_address": master, "vault_address": ACCOUNT, "timeout": REQUEST_TIMEOUT_SECONDS}
 
     def test_reload_picks_up_new_settings(self, keychain):
         import connection

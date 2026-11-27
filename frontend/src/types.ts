@@ -57,12 +57,20 @@ export type Trade = {
   'P&L'?: number
 }
 // Allocations in API requests and stored trades are fractions of the position (0-1), not percentages
-export type HyperliquidOrderRequest = { coin: string; is_buy: boolean; margin_amount: number; leverage: number; entry_price: number; take_profits: TakeProfit[]; stop_losses: TakeProfit[]; is_isolated: boolean }
+export type HyperliquidOrderRequest = {
+  coin: string; is_buy: boolean; margin_amount: number; leverage: number; entry_price: number
+  take_profits: TakeProfit[]; stop_losses: TakeProfit[]; is_isolated: boolean
+  // For the journal entry the backend saves the order as
+  asset?: string; thesis?: string
+}
 export type HyperliquidOrderResponse = {
   status: 'success' | 'partial'
   order_id?: number | null
-  // Every order placed for the trade; sent back when journaling it so its fills are credited to it
+  // Every order placed for the trade, claimed by its journal trade so their fills are credited to it
   order_ids?: { entry?: number | null; take_profits: (number | null)[]; stop_losses: (number | null)[] }
+  // The live journal trade the backend saved the order as; journaled is false only if that failed
+  trade_index: number | null
+  journaled: boolean
   requested_size: number
   filled_size: number
   avg_price: number

@@ -21,9 +21,6 @@ const formatMoney = (value?: number | null) =>
     ? '—'
     : `$${value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
-// The order filled but the journal write failed: the user must act, so this one stays on screen
-class LiveOrderJournalError extends Error {}
-
 export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void }) {
   const queryClient = useQueryClient()
   const { mode } = useMode()
@@ -94,7 +91,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
   }, [currentPrice, direction, feesQuery.data, leverage, maxLeverage, portfolioQuery.data?.portfolio_size, riskPercentage, takeProfits, stopLoss])
 
   const executeMutation = useMutation({
-    mutationFn: async (): Promise<{ warnings: string[] }> => {
+    mutationFn: async (): Promise<{ warnings: string[]; journaled: boolean }> => {
       if (!asset || !currentPrice || !tradeDetails) throw new Error('A live market price is required before placing a trade')
       const currentMode = normalizeMode(mode)
       const coin = asset.split('-')[0] ?? asset
@@ -112,11 +109,11 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
 
       if (currentMode !== 'live') {
         await addTrade({ ...journalEntry, entry_price: currentPrice, position_size: tradeDetails.positionSizeDollars }, currentMode)
-        return { warnings: [] }
+        return { warnings: [], journaled: true }
       }
 
-      // Live: place the order first, then journal what actually filled. A rejected order never
-      // leaves a phantom open trade, and the journal matches the exchange's size and price.
+      // Live: the backend places the order and journals what actually filled, in one request, so a
+      // filled order is in the journal even if this page goes away before the answer arrives
       const order: HyperliquidOrderRequest = {
         coin,
         is_buy: direction === 'long',
@@ -126,26 +123,13 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
         take_profits: takeProfitLevels,
         stop_losses: stopLossLevels,
         is_isolated: true,
+        asset,
+        thesis,
       }
       const { data: fill } = await placeHyperliquidOrder(order)
-      const warnings = fill.warnings ?? []
-      try {
-        await addTrade({
-          ...journalEntry,
-          entry_price: fill.avg_price,
-          position_size: fill.notional,
-          margin: fill.margin_used,
-          exchange_orders: fill.order_ids,
-        }, 'live')
-      } catch (error) {
-        throw new LiveOrderJournalError(
-          `Order FILLED on Hyperliquid (${fill.filled_size} ${coin} @ ${formatMoney(fill.avg_price)}), but saving it to the journal failed: ${getErrorMessage(error)}. Record it manually before closing.`
-          + (warnings.length ? ` Also: ${warnings.join(' ')}` : ''),
-        )
-      }
-      return { warnings }
+      return { warnings: fill.warnings ?? [], journaled: fill.journaled }
     },
-    onSuccess: async ({ warnings }) => {
+    onSuccess: async ({ warnings, journaled }) => {
       setShowConfirmation(false)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['closed-trades'] }),
@@ -155,7 +139,7 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
       ])
       onTradeAdded?.()
       if (warnings.length) {
-        setToast({ tone: 'error', sticky: true, message: `Live order filled and journaled, but: ${warnings.join(' ')}` })
+        setToast({ tone: 'error', sticky: true, message: `Live order filled${journaled ? ' and journaled' : ''}, but: ${warnings.join(' ')}` })
         return
       }
       setToast({
@@ -169,7 +153,8 @@ export default function PlanTrade({ onTradeAdded }: { onTradeAdded?: () => void 
       setShowConfirmation(false)
       setToast({
         tone: 'error',
-        sticky: error instanceof LiveOrderJournalError,
+        // A failed live order may need checking on Hyperliquid, so its message stays on screen
+        sticky: normalizeMode(mode) === 'live',
         message: getErrorMessage(error, 'Error executing trade'),
       })
     },

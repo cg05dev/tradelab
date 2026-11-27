@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import { useQuery } from '@tanstack/react-query'
 import { X } from 'lucide-react'
 import { getOpenTrades, closeTrade } from '../api/trades'
-import { getHyperliquidPrice, getHyperliquidAssets, getHyperliquidPositions, closeHyperliquidPosition, syncHyperliquidFills } from '../api/hyperliquid'
+import { getHyperliquidPrice, getHyperliquidAssets, getHyperliquidPositions, closeHyperliquidPosition, syncHyperliquidFills, reconcilePositions, adoptPosition } from '../api/hyperliquid'
 import { useMode, type UITradingMode } from '../contexts/ModeContext'
 import { getErrorMessage } from '../api/error'
 import { formatPrice } from '../format'
@@ -45,6 +45,17 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
     refetchInterval: 15_000,
     retry: false,
   })
+  // Live: Hyperliquid's positions checked against the open journal trades, so a position the
+  // journal is missing (or a trade whose position is gone) never goes unnoticed
+  const reconcileQuery = useQuery({
+    queryKey: ['hyperliquid-reconcile'],
+    queryFn: async () => (await reconcilePositions()).data,
+    enabled: mode === 'live',
+    refetchInterval: 30_000,
+    retry: false,
+  })
+  const [adopting, setAdopting] = useState<string | null>(null)
+  const [adoptError, setAdoptError] = useState<string | null>(null)
   const isInitialMount = useRef(true)
 
   // Fetch current prices for all open trades
@@ -132,8 +143,25 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
   }, [trades, fetchCurrentPrices])
 
   useImperativeHandle(ref, () => ({
-    loadTrades: () => loadTrades(false)
+    loadTrades: () => {
+      if (mode === 'live') void reconcileQuery.refetch()
+      return loadTrades(false)
+    }
   }))
+
+  const handleAdopt = async (coin: string) => {
+    setAdopting(coin)
+    setAdoptError(null)
+    try {
+      await adoptPosition(coin)
+      await Promise.all([reconcileQuery.refetch(), loadTrades(false)])
+    } catch (error) {
+      setAdoptError(getErrorMessage(error, `Couldn't add the ${coin} position to the journal`))
+    } finally {
+      setAdopting(null)
+    }
+  }
+  const reconcileIssues = mode === 'live' ? reconcileQuery.data?.issues ?? [] : []
 
   // Calculate unrealized P&L
   const calculatePnL = (trade: Trade) => {
@@ -273,6 +301,29 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
 
   return (
     <div className="w-full">
+      {reconcileIssues.length > 0 && (
+        <div role="alert" className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/[0.06] px-4 py-3">
+          <p className="text-sm font-medium text-amber-300">The journal doesn&apos;t match your Hyperliquid positions</p>
+          <ul className="mt-2 space-y-2">
+            {reconcileIssues.map((issue) => (
+              <li key={issue.coin} className="flex items-start justify-between gap-4 text-sm text-neutral-300">
+                <span>{issue.message}</span>
+                {issue.untracked_size !== 0 && (
+                  <button
+                    onClick={() => void handleAdopt(issue.coin)}
+                    disabled={adopting !== null}
+                    className="shrink-0 rounded-md border border-amber-500/40 px-2.5 py-1 text-xs text-amber-200 hover:bg-amber-500/10 disabled:opacity-50"
+                    title="Add the part of the position the journal doesn't account for as an open trade, at the position's entry price"
+                  >
+                    {adopting === issue.coin ? 'Adding…' : 'Add to journal'}
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+          {adoptError && <p className="mt-2 text-xs text-red-400">{adoptError}</p>}
+        </div>
+      )}
       {trades.length === 0 ? (
         <div className="rounded-lg border border-dashed border-white/[0.08] px-5 py-6 text-center">
           <p className="text-sm font-medium text-neutral-300">No open {mode} trades</p>
