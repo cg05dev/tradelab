@@ -2,8 +2,8 @@
 
 import logging
 import time
-from datetime import datetime
 from contextlib import nullcontext
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, HTTPException
@@ -84,20 +84,6 @@ def _find_position(positions: List[Dict], coin: str) -> Optional[Dict]:
     return None
 
 
-@router.get("/status")
-def get_hyperliquid_status():
-    """Get Hyperliquid integration status"""
-    if not hl_client:
-        return {"enabled": False, "connected": False, "message": "Hyperliquid client not available"}
-
-    return {
-        "enabled": hl_client.enabled,
-        "connected": hl_client.info_client is not None,
-        "trading_enabled": hl_client.enabled and hl_client.can_trade,
-        "testnet": hl_client.use_testnet if hl_client.enabled else None,
-        "wallet_address": hl_client.wallet_address if hl_client.enabled else None
-    }
-
 @router.get("/price/{coin}")
 def get_hyperliquid_price(coin: str):
     """Get current price for a coin"""
@@ -110,17 +96,6 @@ def get_hyperliquid_price(coin: str):
 
     return {"coin": coin.upper(), "price": price, "timestamp": datetime.now().isoformat()}
 
-@router.get("/positions")
-def get_hyperliquid_positions(coin: Optional[str] = None):
-    """Get open positions from Hyperliquid"""
-    if not hl_client or not hl_client.enabled:
-        raise HTTPException(status_code=503, detail="No Hyperliquid account connected. Connect one in Settings.")
-
-    if not hl_client.wallet_address:
-        raise HTTPException(status_code=400, detail="Wallet address not configured")
-
-    positions = hl_client.get_positions(coin.upper() if coin else None)
-    return {"positions": positions, "count": len(positions)}
 
 @router.get("/assets")
 def get_hyperliquid_assets():
@@ -263,7 +238,7 @@ def place_hyperliquid_order(request: HyperliquidOrderRequest):
         )
     except Exception as e:
         logger.exception("Entry order request failed")
-        raise HTTPException(status_code=502, detail=f"Order request failed: {e}. Check Hyperliquid before retrying.")
+        raise HTTPException(status_code=502, detail=f"Order request failed: {e}. Check Hyperliquid before retrying.") from e
     logger.debug(f"Order result: {result}")
 
     error = _order_error(result)
@@ -312,22 +287,6 @@ def place_hyperliquid_order(request: HyperliquidOrderRequest):
         "message": f"Order filled: {filled_size} {request.coin} @ ${avg_price:,.2f} at {request.leverage}x leverage",
     }
 
-latest_btc_price = {"price": None, "timestamp": None}
-
-@router.get("/ws-price")
-def get_ws_price():
-    """Get latest BTC price from WebSocket feed"""
-    if not hl_client or not hl_client.enabled:
-        raise HTTPException(status_code=503, detail="Hyperliquid integration not enabled")
-
-    # For now, return REST API price (WebSocket will be implemented next)
-    price = hl_client.get_current_price("BTC")
-    if price:
-        latest_btc_price["price"] = price
-        latest_btc_price["timestamp"] = datetime.now().isoformat()
-
-    return latest_btc_price
-
 class ClosePositionRequest(BaseModel):
     # Coin units to close (one journal trade's share); omit to close the whole position.
     # More than the position holds closes all of it.
@@ -351,7 +310,7 @@ def sync_fills():
         return fill_sync.sync(hl_client)
     except Exception as e:
         logger.exception("Fill sync failed")
-        raise HTTPException(status_code=502, detail=f"Couldn't fetch fills from Hyperliquid: {e}")
+        raise HTTPException(status_code=502, detail=f"Couldn't fetch fills from Hyperliquid: {e}") from e
 
 
 @router.post("/close/{coin}")
@@ -494,4 +453,4 @@ def _close_position(coin: str, request: ClosePositionRequest, journal_trade: Opt
         raise
     except Exception as e:
         logger.exception(f"Error closing position: {e}")
-        raise HTTPException(status_code=500, detail=f"Error closing position: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error closing position: {str(e)}") from e

@@ -17,7 +17,5 @@ export type PnlSeriesPoint = { date?: string; asset?: string; pnl?: number; cumu
 export const getAnalyticsMetrics = (timeframe = 'all', mode?: string) =>
   api.get<AnalyticsMetrics>('/api/analytics/metrics', { params: { timeframe, mode } })
 
-export const getAnalyticsOverview = (mode?: string) => getAnalyticsMetrics('all', mode)
-
 export const getPnlSeries = (timeframe = 'all', mode?: string) =>
   api.get<PnlSeriesPoint[]>('/api/analytics/pnl-series', { params: { timeframe, mode } })

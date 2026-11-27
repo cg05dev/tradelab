@@ -22,16 +22,14 @@ load_dotenv()
 
 # Hyperliquid SDK imports
 try:
-    from hyperliquid.info import Info
-    from hyperliquid.exchange import Exchange
-    from hyperliquid.utils import constants
     import eth_account
+    from hyperliquid.exchange import Exchange
+    from hyperliquid.info import Info
     HYPERLIQUID_AVAILABLE = True
 except ImportError:
     HYPERLIQUID_AVAILABLE = False
     Info = None
     Exchange = None
-    constants = None
     eth_account = None
 
 # Perp prices may have at most 6 - szDecimals decimal places (8 - szDecimals for spot, unused here)
@@ -325,19 +323,19 @@ class HyperliquidClient:
         except Exception as e:
             logger.error(f"Error getting price for {coin}: {e}")
             return None
-    
+
     def get_asset_metadata(self) -> Optional[Dict]:
         """Get asset metadata including max leverage from Hyperliquid"""
         self._ensure_initialized()
-        
+
         if not self._info_client:
             return None
-        
+
         try:
             meta = self._info_client.meta()
             if not meta:
                 return None
-            
+
             # The meta response is a list with universe data
             # Structure: [[universe_data, market_data], ...]
             if isinstance(meta, list) and len(meta) > 0:
@@ -350,7 +348,7 @@ class HyperliquidClient:
                     universe = []
             else:
                 universe = meta.get('universe', []) if isinstance(meta, dict) else []
-            
+
             asset_data = {}
             for asset in universe:
                 name = asset.get('name', '')
@@ -360,51 +358,51 @@ class HyperliquidClient:
                         'sz_decimals': asset.get('szDecimals', 0),
                         'only_isolated': asset.get('onlyIsolated', False)
                     }
-            
+
             return asset_data
         except Exception as e:
             logger.error(f"Error getting asset metadata: {e}")
             return None
-    
+
     def get_positions(self, coin: Optional[str] = None) -> List[Dict]:
         """Get open positions"""
         self._ensure_initialized()
-        
+
         if not self._info_client:
             logger.error("get_positions: Info client not initialized")
             return []
-        
+
         address = self.connection.account_address
         if not address:
             logger.error("get_positions: no account connected")
             return []
-        
+
         try:
             logger.debug(f"Fetching user_state for wallet: {address}")
             user_state = self._info_client.user_state(address)
             logger.debug(f"user_state response: {user_state}")
-            
+
             if not user_state:
                 logger.error("user_state is None")
                 return []
-            
+
             if 'assetPositions' not in user_state:
                 logger.error(f"'assetPositions' not in user_state. Keys: {user_state.keys()}")
                 return []
-            
+
             asset_positions = user_state.get('assetPositions', [])
             logger.debug(f"assetPositions count: {len(asset_positions)}")
             logger.debug(f"assetPositions: {asset_positions}")
-            
+
             positions = []
             for pos_data in asset_positions:
                 position = pos_data.get('position', {})
                 logger.debug(f"Processing position: {position}")
-                
+
                 if coin and position.get('coin') != coin:
                     logger.debug(f"Skipping position, coin mismatch: {position.get('coin')} != {coin}")
                     continue
-                
+
                 positions.append({
                     'coin': position.get('coin'),
                     'size': float(position.get('szi', 0)),
@@ -415,21 +413,21 @@ class HyperliquidClient:
                     'margin_used': float(position.get('marginUsed', 0)),
                     'max_leverage': float(position.get('maxLeverage', 0))
                 })
-            
+
             logger.debug(f"Returning {len(positions)} positions")
             return positions
-            
+
         except Exception as e:
             logger.exception(f"Error getting positions: {e}")
             return []
-    
+
     def place_stop_order(self, coin: str, is_buy: bool, size: float, trigger_price: float, is_long_position: bool) -> Dict:
         """Place a reduce-only stop-market order. `trigger_price` must already be a valid price (see round_price)."""
         self._ensure_initialized()
-        
+
         if not self._exchange_client:
             return {"status": "error", "message": "Exchange client not configured"}
-        
+
         try:
             # A long's stop sells when the price falls to the trigger; a short's buys when it rises to it.
             # isMarket fills at market once triggered. The SDK still requires a limit price, so the
@@ -446,10 +444,10 @@ class HyperliquidClient:
                 reduce_only=True,
                 cloid=None
             )
-            
+
             logger.debug(f"Order result: {result}")
             return result
-            
+
         except Exception as e:
             logger.exception(f"Error placing stop order: {e}")
             return {"status": "error", "message": str(e)}

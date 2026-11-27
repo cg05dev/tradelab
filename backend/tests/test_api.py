@@ -112,35 +112,6 @@ class TestTradeLifecycle:
 
         assert response.status_code == 400
 
-    def test_partial_take_profit_then_final(self, funded):
-        trade_id = _open(funded)
-
-        first = funded.post("/api/trades/partial-close?mode=paper", json={
-            "trade_index": trade_id, "tp_price": 110, "tp_allocation": 0.5, "tp_index": 0,
-        }).json()
-        assert first["pnl"] == pytest.approx(100)
-        assert first["remaining_position_size"] == pytest.approx(1_000)
-
-        funded.post("/api/trades/partial-close?mode=paper", json={
-            "trade_index": trade_id, "tp_price": 120, "tp_allocation": 1.0, "tp_index": 1,
-        })
-
-        closed = funded.get("/api/trades/closed?mode=paper").json()["trades"]
-        assert len(closed) == 1
-        assert closed[0]["P&L"] == pytest.approx(300)
-        assert funded.get("/api/portfolio?mode=paper").json()["portfolio_size"] == pytest.approx(10_300)
-
-    def test_stop_loss_hit_closes_trade(self, funded):
-        trade_id = _open(funded)
-
-        body = funded.post("/api/trades/stop-loss-hit?mode=paper", json={
-            "trade_index": trade_id, "sl_price": 95, "sl_allocation": 1.0, "sl_index": 0,
-        }).json()
-
-        assert body["pnl"] == pytest.approx(-100)
-        closed = funded.get("/api/trades/closed?mode=paper").json()["trades"]
-        assert closed[0]["P&L"] == pytest.approx(-100)
-
     def test_delete(self, funded):
         btc = _open(funded, asset="BTC")
         _open(funded, asset="ETH")
@@ -156,7 +127,7 @@ class TestClosedTradesAndAnalytics:
     @pytest.fixture
     def history(self, funded):
         ids = [_open(funded, asset=asset) for asset in ["BTC", "ETH", "SOL"]]
-        for trade_id, exit_price in zip(ids, [110, 90, 120]):
+        for trade_id, exit_price in zip(ids, [110, 90, 120], strict=True):
             funded.post("/api/trades/close?mode=paper", json={"trade_index": trade_id, "exit_price": exit_price})
         return funded
 
@@ -205,13 +176,14 @@ class TestCalculations:
         assert body["position_size_dollars"] == pytest.approx(100 / (0.05 + 2 * 0.000432 + 0.0005))
         assert body["fee_rates"]["source"] == "account"
 
-    def test_risk_reward(self, client):
-        body = client.post("/api/calculate/risk-reward", json={
-            "entry_price": 100, "stop_loss": 95, "direction": "long",
-            "take_profits": [{"price": 110, "allocation": 1.0}],
+    def test_position_size_without_a_stop_uses_the_liquidation_price(self, funded, no_fees):
+        body = funded.post("/api/calculate/position-size?mode=paper", json={
+            "entry_price": 100, "stop_loss": 0, "leverage": 10, "direction": "long", "risk_percentage": 1,
         }).json()
 
-        assert body["rr_ratio"] == pytest.approx(2.0)
+        # 10x long: liquidated 10% - 1.25% maintenance margin below entry, the planner's estimate
+        assert body["liquidation_price"] == pytest.approx(91.25)
+        assert body["position_size_dollars"] == pytest.approx(100 / 0.0875)
 
 
 class TestExecutionGuard:

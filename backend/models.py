@@ -48,17 +48,6 @@ class CloseTradeRequest(BaseModel):
     trade_index: int
     exit_price: float
 
-class PartialCloseRequest(BaseModel):
-    trade_index: int
-    tp_price: float
-    tp_allocation: float
-    tp_index: int
-
-class StopLossHitRequest(BaseModel):
-    trade_index: int
-    sl_price: float
-    sl_allocation: float
-    sl_index: int
 
 class UpdatePortfolioRequest(BaseModel):
     portfolio_size: float

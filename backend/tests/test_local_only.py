@@ -1,11 +1,10 @@
 """The API only answers the TradeLab page on this computer (see main.local_only)."""
 
 import pytest
+from conftest import make_client
 from fastapi.testclient import TestClient
 
 import main
-
-from conftest import make_client
 
 
 @pytest.fixture

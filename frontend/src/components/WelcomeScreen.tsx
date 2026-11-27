@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { TrendingUp } from 'lucide-react'
 import { updatePortfolio } from '../api/portfolio'
-import { setMode } from '../api/hyperliquid'
+import { setMode } from '../api/mode'
 import { getErrorMessage } from '../api/error'
 import { MODE_STORAGE_KEY } from '../contexts/ModeContext'
 
@@ -21,7 +21,7 @@ export default function WelcomeScreen({ onComplete }: { onComplete: () => void }
       if (!portfolioSize || Number.isNaN(size) || size <= 0) {
         throw new Error('Please enter a starting balance greater than 0')
       }
-      await setMode('planning')
+      await setMode('paper')
       window.localStorage.setItem(MODE_STORAGE_KEY, 'paper')
       return updatePortfolio(size, 'paper')
     },

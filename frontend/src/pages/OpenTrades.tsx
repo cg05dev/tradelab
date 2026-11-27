@@ -1,12 +1,12 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { X } from 'lucide-react'
-import { getOpenTrades, closeTrade, partialCloseTrade, stopLossHit } from '../api/trades'
+import { getOpenTrades, closeTrade } from '../api/trades'
 import { getHyperliquidPrice, closeHyperliquidPosition, syncHyperliquidFills } from '../api/hyperliquid'
-import { TradeCardSkeleton } from '../components/LoadingSkeleton'
 import { useMode, type UITradingMode } from '../contexts/ModeContext'
 import { getErrorMessage } from '../api/error'
 import { formatPrice } from '../format'
-import type { Trade, ApiError } from '../types'
+import { liquidationPrice } from '../trading'
+import type { Trade } from '../types'
 
 // `mode` is the journal the trade was loaded from, so actions never apply it to the other mode
 type TradeWithIndex = Trade & { index: number; mode: UITradingMode }
@@ -26,8 +26,6 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
   const [showCloseModal, setShowCloseModal] = useState(false)
   const [closeOnHyperliquid, setCloseOnHyperliquid] = useState(true)
   const [isClosing, setIsClosing] = useState(false)
-  const [showTPModal, setShowTPModal] = useState(false)
-  const [showSLModal, setShowSLModal] = useState(false)
   const [showTradeDetailModal, setShowTradeDetailModal] = useState(false)
 
   const [loading, setLoading] = useState(true)
@@ -138,24 +136,11 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
     }
   }
 
-  // Calculate liquidation price with maintenance margin (Hyperliquid formula)
-  // MM = 1.25% for BTC (40x max leverage assets)
-  const MAINTENANCE_MARGIN = 0.0125
-  
   const calculateLiquidationPrice = (trade: Trade) => {
     const entry = typeof trade.Entry === 'number' ? trade.Entry : parseFloat(String(trade.Entry ?? 0))
     const leverage = typeof trade.Leverage === 'number' ? trade.Leverage : parseFloat(String(trade.Leverage ?? 0)) || 1
-    
     if (!entry || !leverage) return null
-    
-    // Liquidation threshold = (1/leverage) - maintenance_margin
-    const liquidationThreshold = (1 / leverage) - MAINTENANCE_MARGIN
-    
-    if (trade.Direction?.toLowerCase() === 'long') {
-      return entry * (1 - liquidationThreshold)
-    } else {
-      return entry * (1 + liquidationThreshold)
-    }
+    return liquidationPrice(entry, leverage, trade.Direction)
   }
 
   const handleCloseTrade = useCallback(async (): Promise<void> => {
@@ -252,74 +237,12 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
     }
   }, [selectedTrade, isClosing, loadTrades, closeOnHyperliquid, mode, currentPrices, setTrades])
 
-  const handleTPHit = useCallback(async (tpIndex: number): Promise<void> => {
-    if (!selectedTrade) return
-
-    const tradeIndex = selectedTrade.index
-    const originalTrades = [...trades]
-
-    setTrades((prev: Trade[]) => prev.map((trade) => {
-      const actualIndex = trade._index !== undefined ? trade._index : prev.indexOf(trade)
-      if (actualIndex === tradeIndex) {
-        const hitTPs = JSON.parse(trade.Hit_TPs || '[]')
-        return {
-          ...trade,
-          Hit_TPs: JSON.stringify([...hitTPs, tpIndex])
-        }
-      }
-      return trade
-    }))
-    setShowTPModal(false)
-    setSelectedTrade(null)
-
-    try {
-      const tps = JSON.parse(selectedTrade.TPs || '[]') as Array<{ price: number; allocation: number }>
-      const tp = tps[tpIndex]
-      await partialCloseTrade(tradeIndex, tp.price, tp.allocation, tpIndex)
-      await loadTrades()
-    } catch (error) {
-      const err = error as ApiError
-      setTrades(originalTrades)
-      alert(err.response?.data?.detail || 'Error recording TP hit')
-    }
-  }, [selectedTrade, trades, loadTrades, setTrades])
-
-  const handleSLHit = useCallback(async (slIndex: number, slPrice: number, slAllocation: number): Promise<void> => {
-    if (!selectedTrade) return
-
-    const tradeIndex = selectedTrade.index
-    const originalTrades = [...trades]
-
-    setTrades((prev: Trade[]) => prev.map((trade) => {
-      const actualIndex = trade._index !== undefined ? trade._index : prev.indexOf(trade)
-      if (actualIndex === tradeIndex) {
-        return {
-          ...trade,
-          SL_Hit: true,
-          SL_Price: slPrice
-        }
-      }
-      return trade
-    }))
-    setShowSLModal(false)
-    setSelectedTrade(null)
-
-    try {
-      await stopLossHit(tradeIndex, slPrice, slAllocation, slIndex)
-      await loadTrades()
-    } catch (error) {
-      const err = error as ApiError
-      setTrades(originalTrades)
-      alert(err.response?.data?.detail || 'Error recording SL hit')
-    }
-  }, [selectedTrade, trades, loadTrades, setTrades])
-
   if (loading) {
     return (
       <div className="w-full py-4">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(3)].map((_, i) => (
-            <TradeCardSkeleton key={i} />
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-40 animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.02]" />
           ))}
         </div>
       </div>
@@ -539,107 +462,6 @@ const OpenTrades = forwardRef(function OpenTrades(_props, ref) {
           </div>
         </div>
       )}
-
-      {/* TP Hit Modal */}
-      {showTPModal && selectedTrade && (() => {
-        const tps = JSON.parse(selectedTrade.TPs || '[]') as Array<{ price: number; allocation: number }>
-        const hitTPs = JSON.parse(selectedTrade.Hit_TPs || '[]') as number[]
-        const availableTPs = tps.filter((_: { price: number; allocation: number }, i: number) => !hitTPs.includes(i))
-        
-        return (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="glass-panel p-5 max-w-md w-full">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-white">Take Profit Hit</h3>
-                <button onClick={() => setShowTPModal(false)} className="text-neutral-500 hover:text-white">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-neutral-500 mb-0.5">Asset: {selectedTrade.Asset}</p>
-                  <p className="text-xs text-neutral-500">Entry: {formatPrice(selectedTrade.Entry)}</p>
-                </div>
-                {availableTPs.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {availableTPs.map((tp, idx) => {
-                      const originalIndex = tps.findIndex((t: { price: number; allocation: number }) => t.price === tp.price && t.allocation === tp.allocation)
-                      return (
-                        <button
-                          key={idx}
-                          onClick={() => handleTPHit(originalIndex)}
-                          className="w-full px-3 py-2 bg-black/60 hover:bg-green-500/10 rounded text-left transition-colors border border-neutral-700/60 hover:border-green-500/40"
-                        >
-                          <p className="text-white text-sm">TP{originalIndex + 1}: {formatPrice(tp.price)}</p>
-                          <p className="text-xs text-neutral-500">Allocation: {tp.allocation * 100}%</p>
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-neutral-500 text-center py-4 text-sm">All take profits have been hit</p>
-                )}
-                <button
-                  onClick={() => setShowTPModal(false)}
-                  className="w-full px-3 py-2 bg-black/60 hover:bg-black/80 border border-neutral-700/60 text-white rounded text-sm transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* SL Hit Modal */}
-      {showSLModal && selectedTrade && (() => {
-        const sls = JSON.parse(selectedTrade.SLs || '[]') as Array<{ price: number; allocation: number }>
-        const availableSLs = sls.length > 0 ? sls : ((selectedTrade.SL ?? 0) > 0 ? [{ price: selectedTrade.SL ?? 0, allocation: 1.0 }] : [])
-        
-        return (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="glass-panel p-5 max-w-md w-full">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-medium text-white">Stop Loss Hit</h3>
-                <button onClick={() => setShowSLModal(false)} className="text-neutral-500 hover:text-white">
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="space-y-3">
-                <div>
-                  <p className="text-xs text-neutral-500 mb-0.5">Asset: {selectedTrade.Asset}</p>
-                  <p className="text-xs text-neutral-500">Entry: {formatPrice(selectedTrade.Entry)}</p>
-                </div>
-                {availableSLs.length > 0 ? (
-                  <div className="space-y-1.5">
-                    {(availableSLs as Array<{ price: number; allocation: number }>).map((sl, idx) => {
-                      const originalIndex = sls.length > 0 ? idx : 0
-                      return (
-                        <button
-                          key={idx}
-                          onClick={() => handleSLHit(originalIndex, sl.price, sl.allocation)}
-                          className="w-full px-3 py-2 bg-black/60 hover:bg-red-500/10 rounded text-left transition-colors border border-neutral-700/60 hover:border-red-500/40"
-                        >
-                          <p className="text-white text-sm">SL{originalIndex + 1}: {formatPrice(sl.price)}</p>
-                          <p className="text-xs text-neutral-500">Allocation: {sl.allocation * 100}%</p>
-                        </button>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-neutral-500 text-center py-4 text-sm">No stop losses configured</p>
-                )}
-                <button
-                  onClick={() => setShowSLModal(false)}
-                  className="w-full px-3 py-2 bg-black/60 hover:bg-black/80 border border-neutral-700/60 text-white rounded text-sm transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
 
       {/* Trade Detail Modal */}
       {showTradeDetailModal && selectedTradeForDetail && (

@@ -1,13 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { getMode, setMode as setModeApi } from '../api/hyperliquid'
+import { getMode, setMode as setModeApi } from '../api/mode'
 
 export const MODE_STORAGE_KEY = 'tradelab-mode'
 export type UITradingMode = 'paper' | 'live'
-type BackendMode = 'planning' | 'live'
 
 const normalizeMode = (value?: string | null): UITradingMode => value === 'paper' ? 'paper' : 'live'
-const toBackendMode = (mode: UITradingMode): BackendMode => mode === 'paper' ? 'planning' : 'live'
 
 interface ModeContextType {
   mode: UITradingMode
@@ -55,7 +53,7 @@ export function ModeProvider({ children }: { children: ReactNode }) {
 
     setIsLoading(true)
     try {
-      await setModeApi(toBackendMode(nextMode))
+      await setModeApi(nextMode)
       await queryClient.invalidateQueries({ queryKey: ['mode'] })
     } catch (error) {
       // Revert on error

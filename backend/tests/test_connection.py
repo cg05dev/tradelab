@@ -3,12 +3,12 @@
 import copy
 
 import pytest
+from conftest import make_client
 from eth_account import Account
 from eth_account.messages import encode_typed_data
 from hyperliquid.utils.signing import sign_agent
 
 import connection
-from conftest import make_client
 from routers import connection as connection_router
 
 MAIN = Account.from_key("0x" + "11" * 32)       # the user's main wallet

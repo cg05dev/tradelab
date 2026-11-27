@@ -1,6 +1,6 @@
-"""
-FastAPI Backend for TradeLab
-Handles all trading journal logic and data persistence
+"""TradeLab API: the trading journal, position sizing, and the Hyperliquid integration.
+
+Run with `python main.py`. It listens on localhost only (see the local-only middleware below).
 """
 
 import asyncio
@@ -21,12 +21,11 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
-from routers import analytics, calculations, connection, hyperliquid, mode, portfolio, system, trades, webhook  # noqa: E402
-
 import fees  # noqa: E402
 import fill_sync  # noqa: E402
 import paper_sim  # noqa: E402
 from hyperliquid_client import hl_client  # noqa: E402
+from routers import analytics, calculations, connection, hyperliquid, mode, portfolio, system, trades, webhook  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -125,11 +124,4 @@ for module in (system, portfolio, mode, trades, analytics, calculations, hyperli
 
 if __name__ == "__main__":
     import uvicorn
-    # Optimize for faster startup - use single worker, disable access log
-    uvicorn.run(
-        app, 
-        host="127.0.0.1", 
-        port=8000,
-        log_level="warning",  # Reduce logging overhead
-        access_log=False  # Disable access logs for faster startup
-    )
+    uvicorn.run(app, host="127.0.0.1", port=8000, log_level="warning", access_log=False)

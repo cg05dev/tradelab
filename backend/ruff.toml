@@ -1,0 +1,9 @@
+target-version = "py310"
+line-length = 120
+extend-exclude = ["venv"]
+
+[lint]
+# pycodestyle, pyflakes, import order, bugbear
+select = ["E", "F", "W", "I", "B"]
+# Long lines are left to judgment: many are descriptive strings and comments
+ignore = ["E501"]

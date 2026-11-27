@@ -10,8 +10,8 @@ from pydantic import BaseModel
 
 from models import PositionSizeRequest, StopLoss, TakeProfit, TradeData
 from routers.calculations import calculate_position_size
-from routers.trades import add_trade
 from routers.portfolio import portfolio_size_for
+from routers.trades import add_trade
 from storage import save_portfolio_size
 
 logger = logging.getLogger(__name__)
@@ -118,7 +118,6 @@ async def webhook_trade(data: WebhookTrade, x_webhook_secret: Optional[str] = He
             "position_size": position_size,
             "margin_required": margin,
             "risk_amount": pos_result.get("risk_amount", 0),
-            "rr_ratio": pos_result.get("rr_ratio", 0) if data.sl > 0 else 0,
             "liquidation_price": pos_result.get("liquidation_price", 0),
             "trade_index": result.get("trade_index"),
         }
@@ -126,4 +125,4 @@ async def webhook_trade(data: WebhookTrade, x_webhook_secret: Optional[str] = He
         raise
     except Exception as e:
         logger.exception(f"Webhook trade error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

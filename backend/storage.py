@@ -270,20 +270,6 @@ def delete_trade(trade_id: int, mode: Optional[str] = None) -> bool:
         return conn.execute("DELETE FROM trades WHERE id = ? AND mode = ?", (trade_id, current_mode)).rowcount > 0
 
 
-def clear_trades(mode: Optional[str] = None):
-    current_mode = _resolve_mode(mode)
-    with _connect() as conn:
-        conn.execute("DELETE FROM trades WHERE mode = ?", (current_mode,))
-
-
-def replace_trades(df, mode: Optional[str] = None):
-    """Replace a mode's whole journal (CSV import) in a single transaction."""
-    current_mode = _resolve_mode(mode)
-    with _connect() as conn:
-        conn.execute("DELETE FROM trades WHERE mode = ?", (current_mode,))
-        _insert_rows(conn, df, current_mode)
-
-
 def load_portfolio_size(mode: Optional[str] = None):
     """Load portfolio size for the selected mode (0 when unset)"""
     current_mode = _resolve_mode(mode)

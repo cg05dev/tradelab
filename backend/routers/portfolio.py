@@ -74,7 +74,7 @@ def reset_portfolio(mode: Optional[str] = None):
             return {"message": "Portfolio reset successfully"}
         return {"message": "Portfolio was not set"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error resetting portfolio: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error resetting portfolio: {str(e)}") from e
 
 @router.get("")
 def get_portfolio(mode: Optional[str] = None):

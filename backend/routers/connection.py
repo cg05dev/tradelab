@@ -14,7 +14,7 @@ import logging
 import secrets
 import threading
 import time
-from typing import Dict, Optional
+from typing import Dict
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -74,7 +74,7 @@ def _role(address: str, network: str) -> Dict:
         return fetch_user_role(address, network)
     except Exception as e:
         logger.warning(f"userRole lookup failed for {address} on {network}: {e}")
-        raise HTTPException(status_code=502, detail=f"Couldn't reach Hyperliquid {network} to check {address}. Try again.")
+        raise HTTPException(status_code=502, detail=f"Couldn't reach Hyperliquid {network} to check {address}. Try again.") from e
 
 
 def _signer_for(account_address: str, network: str) -> str:
@@ -306,7 +306,7 @@ def approve_api_wallet(request: ApproveRequest):
             encode_typed_data(full_message=pending["typed_data"]), signature=request.signature
         ).lower()
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Couldn't read the wallet's signature: {e}")
+        raise HTTPException(status_code=400, detail=f"Couldn't read the wallet's signature: {e}") from e
     if signed_by != pending["signer"]:
         raise HTTPException(
             status_code=400,
@@ -318,7 +318,7 @@ def approve_api_wallet(request: ApproveRequest):
         result = hl_client.submit_signed_action(pending["action"], signature, request.nonce)
     except Exception as e:
         logger.warning(f"approveAgent submission failed: {e}")
-        raise HTTPException(status_code=502, detail=f"Couldn't reach Hyperliquid: {e}")
+        raise HTTPException(status_code=502, detail=f"Couldn't reach Hyperliquid: {e}") from e
     if not isinstance(result, dict) or result.get("status") != "ok":
         detail = result.get("response") if isinstance(result, dict) else result
         raise HTTPException(status_code=400, detail=f"Hyperliquid rejected the approval: {detail}")
