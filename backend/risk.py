@@ -1,4 +1,4 @@
-"""Liquidation estimates shared by position sizing and the paper simulator."""
+"""Liquidation estimate used by the paper simulator."""
 
 # Hyperliquid's maintenance margin for BTC: half the initial margin at its 40x maximum leverage.
 # Other assets have their own, so for them this is an estimate. The planner uses the same value

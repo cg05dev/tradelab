@@ -51,15 +51,6 @@ def resolve_portfolio(mode: Optional[str] = None) -> Dict:
         return {"portfolio_size": None, "source": "hyperliquid", "stale": True, "sync_error": UNREACHABLE}
 
 
-def portfolio_size_for(mode: Optional[str] = None) -> float:
-    """The size to risk against. Refuses (rather than guessing) when the live account value is unknown."""
-    portfolio = resolve_portfolio(mode)
-    if portfolio["portfolio_size"] is None:
-        status = 409 if portfolio["source"] == "none" else 503
-        raise HTTPException(status_code=status, detail=portfolio["sync_error"])
-    return portfolio["portfolio_size"]
-
-
 def _paper_only(mode: Optional[str]):
     if _resolve_mode(mode) != "paper":
         raise HTTPException(status_code=400, detail=LIVE_IS_SYNCED)
